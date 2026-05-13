@@ -1135,49 +1135,84 @@ function getDefaultState() {
   };
 }
 
-async function hydrateStateFromSupabase(supabase, user) {
-  const { data, error } = await supabase
-    .from("app_state")
-    .select("payload")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (error) {
-    console.error(error);
+async function hydrateStateFromCloud() {
+  const base = window.__attendanceApiBase;
+  const token = window.__attendanceToken;
+  const userId = window.__attendanceUser?.id;
+  if (!base || !token || !userId) {
     state = loadStateFromLocalStorage();
     return;
   }
-
-  if (data?.payload != null) {
-    const rawPayload = data.payload;
-    const asObj = typeof rawPayload === "string" ? JSON.parse(rawPayload) : rawPayload;
-    const normalized = parseStateFromJSON(asObj);
-    if (normalized) {
-      state = normalized;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try {
+    const response = await fetch(`${base}/api/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.status === 401) {
+      state = loadStateFromLocalStorage();
+      if (typeof window.wfhInvalidateSession === "function") {
+        window.wfhInvalidateSession(
+          "Could not load your data from the server (session not accepted). If you recently changed JWT_SECRET on Railway, sign in again.",
+        );
+      }
+      const authErr = new Error("SESSION_EXPIRED");
+      authErr.skipAuthMessage = true;
+      throw authErr;
+    }
+    if (!response.ok) {
+      console.error("Cloud load failed:", response.status);
+      state = loadStateFromLocalStorage();
       return;
     }
+    const data = await response.json();
+    if (data?.payload != null) {
+      const rawPayload = data.payload;
+      const asObj = typeof rawPayload === "string" ? JSON.parse(rawPayload) : rawPayload;
+      const normalized = parseStateFromJSON(asObj);
+      if (normalized) {
+        state = normalized;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        return;
+      }
+    }
+    state = loadStateFromLocalStorage();
+    await flushCloudSaveInternal();
+  } catch (err) {
+    console.error(err);
+    state = loadStateFromLocalStorage();
   }
-
-  state = loadStateFromLocalStorage();
-  await flushCloudSaveInternal(supabase, user.id);
 }
 
-async function flushCloudSaveInternal(supabase, userId) {
-  if (!state || !supabase || !userId) {
+async function flushCloudSaveInternal() {
+  const base = window.__attendanceApiBase;
+  const token = window.__attendanceToken;
+  const userId = window.__attendanceUser?.id;
+  if (!state || !base || !token || !userId) {
     return;
   }
   state.profiles.forEach(normalizeProfileMarks);
-  const { error } = await supabase.from("app_state").upsert(
-    {
-      user_id: userId,
-      payload: state,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id" },
-  );
-  if (error) {
-    console.error("Cloud save failed:", error);
+  try {
+    const response = await fetch(`${base}/api/state`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ payload: state }),
+    });
+    if (response.status === 401) {
+      if (typeof window.wfhInvalidateSession === "function") {
+        window.wfhInvalidateSession(
+          "Save failed: the server rejected your session. Sign in again (often fixed by a stable JWT_SECRET on Railway).",
+        );
+      }
+      return;
+    }
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("Cloud save failed:", response.status, text);
+    }
+  } catch (err) {
+    console.error("Cloud save failed:", err);
   }
 }
 
@@ -1188,23 +1223,25 @@ function saveState() {
   state.profiles.forEach(normalizeProfileMarks);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
-  const supabase = window.__attendanceSupabase;
+  const base = window.__attendanceApiBase;
+  const token = window.__attendanceToken;
   const user = window.__attendanceUser;
-  if (!supabase || !user?.id) {
+  if (!base || !token || !user?.id) {
     return;
   }
   clearTimeout(cloudSaveTimer);
   cloudSaveTimer = setTimeout(() => {
-    flushCloudSaveInternal(supabase, user.id);
+    flushCloudSaveInternal();
   }, 700);
 }
 
 window.flushAttendanceCloudNow = async function flushAttendanceCloudNow() {
   clearTimeout(cloudSaveTimer);
-  const supabase = window.__attendanceSupabase;
+  const base = window.__attendanceApiBase;
+  const token = window.__attendanceToken;
   const user = window.__attendanceUser;
-  if (supabase && user?.id && state) {
-    await flushCloudSaveInternal(supabase, user.id);
+  if (base && token && user?.id && state) {
+    await flushCloudSaveInternal();
   }
 };
 
@@ -1550,11 +1587,12 @@ async function loadBankHolidays() {
   }
 }
 
-window.startAttendanceApp = async function startAttendanceApp({ supabase, user }) {
-  window.__attendanceSupabase = supabase;
+window.startAttendanceApp = async function startAttendanceApp({ user, token, apiBaseUrl }) {
+  window.__attendanceApiBase = String(apiBaseUrl || "").replace(/\/$/, "");
+  window.__attendanceToken = token;
   window.__attendanceUser = user;
 
-  await hydrateStateFromSupabase(supabase, user);
+  await hydrateStateFromCloud();
 
   const accountEmailEl = document.getElementById("account-email");
   const signOutBtn = document.getElementById("sign-out-button");

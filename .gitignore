@@ -1,4 +1,7 @@
-# Local Supabase keys — copy from config.example.js
+# Local API URL — copy from config.example.js
 config.js
+
+server/.env
+server/node_modules
 
 .DS_Store

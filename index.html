@@ -14,16 +14,16 @@
         <div id="auth-config-error" class="auth-config-error" hidden>
           <p class="auth-config-error-title">Sign-in is not connected yet</p>
           <p class="muted">
-            This app saves your data to a free <a href="https://supabase.com" target="_blank" rel="noopener noreferrer">Supabase</a> database. Once connected, you can register and sign in with email and password.
+            This app saves your data to <strong>PostgreSQL</strong> on <a href="https://railway.app" target="_blank" rel="noopener noreferrer">Railway</a>, via a small API you deploy. Once the API URL is in <code>config.js</code>, you can register and sign in with email and password.
           </p>
           <ol class="auth-config-steps">
-            <li>Create a project (free tier is fine).</li>
-            <li>Open <strong>Project Settings → API</strong> and copy the <strong>Project URL</strong> and <strong>anon public</strong> key into <code>config.js</code> (see <code>config.example.js</code>).</li>
-            <li>Open <strong>SQL Editor</strong>, paste the contents of <code>supabase/schema.sql</code>, and run it.</li>
+            <li>In Railway, add a <strong>PostgreSQL</strong> database, open <strong>Query</strong> (or connect with psql), and run <code>postgres/schema.sql</code>.</li>
+            <li>Create a new <strong>empty service</strong>, connect the same repo, set <strong>Root Directory</strong> to <code>server</code>, and add env vars: <code>DATABASE_URL</code> (reference the Postgres plugin), <code>JWT_SECRET</code> (long random string), and <code>CORS_ORIGIN</code> (your site URL, e.g. GitHub Pages origin).</li>
+            <li>Deploy, copy the service <strong>public HTTPS URL</strong> into <code>config.js</code> as <code>WFH_API.baseUrl</code> (see <code>config.example.js</code>).</li>
             <li>Reload this page.</li>
           </ol>
           <p class="muted small">
-            Tip: under <strong>Authentication → Providers → Email</strong>, turn off “Confirm email” while testing so new accounts can sign in right away.
+            Local dev: API may use <code>http://localhost:3000</code>; set the same origin in <code>CORS_ORIGIN</code> on the server.
           </p>
         </div>
         <form id="auth-form" class="auth-form" autocomplete="on">
@@ -158,9 +158,8 @@
       </main>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script>
-      window.WFH_SUPABASE = window.WFH_SUPABASE || { url: "", anonKey: "" };
+      window.WFH_API = window.WFH_API || { baseUrl: "" };
     </script>
     <script src="./config.js"></script>
     <script src="./auth.js"></script>
