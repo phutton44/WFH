@@ -1177,6 +1177,9 @@ async function hydrateStateFromCloud() {
     state = loadStateFromLocalStorage();
     await flushCloudSaveInternal();
   } catch (err) {
+    if (err?.skipAuthMessage) {
+      throw err;
+    }
     console.error(err);
     state = loadStateFromLocalStorage();
   }
@@ -1593,6 +1596,12 @@ window.startAttendanceApp = async function startAttendanceApp({ user, token, api
   window.__attendanceUser = user;
 
   await hydrateStateFromCloud();
+
+  if (!window.__attendanceToken || !window.__attendanceUser?.id) {
+    const authErr = new Error("SESSION_EXPIRED");
+    authErr.skipAuthMessage = true;
+    throw authErr;
+  }
 
   const accountEmailEl = document.getElementById("account-email");
   const signOutBtn = document.getElementById("sign-out-button");
