@@ -135,7 +135,7 @@ Two panels in a **responsive grid** (side by side from ~768px): shared **donut c
 
 - **Multi-user**: **profile switcher** with **created** date to the **left** of the picker (London calendar date).  
 - **Data isolated per profile** in storage.  
-- **Signed-in users**: full app state is synced to **PostgreSQL** (`public.app_state` via the deployed **REST API**); the browser also keeps a **localStorage** copy for fast load and resilience. **Without** `config.js` pointing at the API, the auth gate explains setup.
+- **Signed-in users**: full app state is synced to **PostgreSQL** on **Supabase** (`public.app_state`); the browser also keeps **localStorage** as cache. **Without** `config.js` (`WFH_SUPABASE`), the auth gate shows setup steps.
 
 ---
 
@@ -153,7 +153,7 @@ Implementation bands:
 
 ## 10. Data (high level)
 
-All profiles and marks for a signed-in user are stored as **one JSON document** in Postgres (`app_state.payload`); the app normalizes that into per-profile structures in memory. Access is enforced in the **API** (JWT identifies `user_id` for reads/writes).
+All profiles and marks for a signed-in user are stored as **one JSON document** in Postgres (`app_state.payload`); the app normalizes that into per-profile structures in memory. **Supabase RLS** restricts each row to `auth.uid()`.
 
 Per profile:
 
@@ -176,7 +176,7 @@ Legacy **`fyStartMonth`** in saved JSON is **stripped on load/save**; it is not 
 
 ## 12. Technical notes (v1)
 
-- **Storage**: browser **localStorage** (key `attendanceTracker.v1`) as cache; **PostgreSQL** table **`public.app_state`** (`user_id`, **`payload` JSONB**, `updated_at`) for the canonical copy per signed-in user. **`public.users`** holds email + password hash for the API. The **Node server** (`server/`) issues **JWTs** and only reads/writes `app_state` for the authenticated user. **Railway** (or any host) can run Postgres + the API.  
+- **Storage**: browser **localStorage** (key `attendanceTracker.v1`) as cache; **PostgreSQL** on **Supabase** — table **`public.app_state`** (`user_id` → `auth.users`, **`payload` JSONB**, `updated_at`) with **RLS**; **Supabase Auth** + JS client in the browser.  
 - **Timezone**: **Europe/London** for “today” and month boundaries.  
 - **Export** (optional v1.1): CSV for appraisal backup.
 
@@ -194,6 +194,6 @@ Legacy **`fyStartMonth`** in saved JSON is **stripped on load/save**; it is not 
 | Target | **40%** default; per profile in settings |
 | Leave | Allowance per calendar year; logged days update views |
 | Users | Multiple local profiles |
-| Hosting / DB | Static front-end; **Railway PostgreSQL** + **Node REST API** for signed-in sync |
+| Hosting / DB | **Vercel** (or any static host) + **Supabase** (Postgres + Auth + RLS) |
 
 This is the **single master spec** for implementation.

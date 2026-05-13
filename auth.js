@@ -1,10 +1,8 @@
 /**
- * Email / password gate using the WFH API (Railway PostgreSQL behind REST + JWT).
- * Requires `config.js` (from config.example.js) with your deployed API base URL.
+ * Email / password via Supabase Auth; data in PostgreSQL (`app_state`) through the Supabase client.
+ * Requires `config.js` (from `config.example.js`) and the Supabase JS bundle on the page.
  */
 (function () {
-  const TOKEN_KEY = "wfh.attendance.jwt";
-
   const authGate = document.getElementById("auth-gate");
   const mainApp = document.getElementById("main-app");
   const authForm = document.getElementById("auth-form");
@@ -16,13 +14,8 @@
   const authConfigError = document.getElementById("auth-config-error");
 
   let mode = "signin";
+  let supabaseClient = null;
   let enteredApp = false;
-
-  function getApiBase() {
-    const cfg = window.WFH_API;
-    const raw = String(cfg?.baseUrl || "").trim();
-    return raw.replace(/\/$/, "");
-  }
 
   function setMessage(text, isError) {
     if (!authMessage) {
@@ -54,7 +47,7 @@
     setMessage("");
   }
 
-  async function enterApp(user, token) {
+  async function enterApp(supabase, user) {
     if (enteredApp) {
       return;
     }
@@ -70,20 +63,17 @@
       enteredApp = false;
       return;
     }
-    sessionStorage.setItem(TOKEN_KEY, token);
     try {
-      await window.startAttendanceApp({
-        user,
-        token,
-        apiBaseUrl: getApiBase(),
-      });
+      await window.startAttendanceApp({ supabase, user });
     } catch (err) {
       console.error(err);
       if (!err?.skipAuthMessage) {
         setMessage(err?.message || "Could not load your data.", true);
       }
       enteredApp = false;
-      sessionStorage.removeItem(TOKEN_KEY);
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
       if (authGate) {
         authGate.hidden = false;
       }
@@ -115,9 +105,8 @@
       setMessage("Enter email and password.", true);
       return;
     }
-    const base = getApiBase();
-    if (!base) {
-      setMessage("API URL is not set up yet. See the instructions above.", true);
+    if (!supabaseClient) {
+      setMessage("Sign-in is not set up yet. See the instructions above.", true);
       return;
     }
 
@@ -125,21 +114,43 @@
     setMessage("");
 
     try {
-      const path = mode === "signin" ? "/api/auth/login" : "/api/auth/register";
-      const response = await fetch(`${base}${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.error || (mode === "signin" ? "Sign-in failed" : "Registration failed"));
+      if (mode === "signin") {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) {
+          throw error;
+        }
+        if (data.session?.user) {
+          await enterApp(supabaseClient, data.session.user);
+          return;
+        }
+        const {
+          data: { session: recovered },
+        } = await supabaseClient.auth.getSession();
+        if (recovered?.user) {
+          await enterApp(supabaseClient, recovered.user);
+          return;
+        }
+        setMessage("Signed in…", false);
+      } else {
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const { data, error } = await supabaseClient.auth.signUp({
+          email,
+          password,
+          options: origin ? { emailRedirectTo: `${origin}/` } : undefined,
+        });
+        if (error) {
+          throw error;
+        }
+        if (data.session?.user) {
+          await enterApp(supabaseClient, data.session.user);
+          return;
+        }
+        setMessage(
+          "Account created. Check your email and click the confirmation link, then come back and sign in. " +
+            "If nothing arrives, look in Spam—or in Supabase go to Authentication → Providers → Email and turn off “Confirm email” for instant sign-in while testing.",
+          false,
+        );
       }
-      if (!data.token || !data.user?.id) {
-        throw new Error("Unexpected response from server.");
-      }
-      setMessage(mode === "signin" ? "Signed in…" : "Welcome…", false);
-      await enterApp(data.user, data.token);
     } catch (err) {
       setMessage(err?.message || "Something went wrong.", true);
     } finally {
@@ -151,12 +162,16 @@
     if (!cfg) {
       return false;
     }
-    const baseUrl = String(cfg.baseUrl || "").trim();
-    if (!baseUrl || baseUrl.includes("YOUR_RAILWAY") || baseUrl.includes("your-app.up.railway.app")) {
+    const url = String(cfg.url || "").trim();
+    const anonKey = String(cfg.anonKey || "").trim();
+    if (!url || !anonKey) {
+      return false;
+    }
+    if (url.includes("YOUR_PROJECT") || anonKey.includes("YOUR_SUPABASE")) {
       return false;
     }
     try {
-      const u = new URL(baseUrl);
+      const u = new URL(url);
       if (u.protocol === "https:") {
         return true;
       }
@@ -169,44 +184,13 @@
     }
   }
 
-  async function tryResumeSession() {
-    const token = sessionStorage.getItem(TOKEN_KEY);
-    if (!token) {
-      return;
-    }
-    const base = getApiBase();
-    if (!base) {
-      sessionStorage.removeItem(TOKEN_KEY);
-      return;
-    }
-    try {
-      const response = await fetch(`${base}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        sessionStorage.removeItem(TOKEN_KEY);
-        return;
-      }
-      const data = await response.json();
-      if (data?.user?.id) {
-        await enterApp(data.user, token);
-      } else {
-        sessionStorage.removeItem(TOKEN_KEY);
-      }
-    } catch {
-      sessionStorage.removeItem(TOKEN_KEY);
-    }
-  }
-
   /**
-   * Called when the API rejects the JWT (401). Clears token and returns to the sign-in screen.
+   * Invalid Supabase session / RLS auth failure: sign out and return to the gate.
    */
-  window.wfhInvalidateSession = function (message) {
-    sessionStorage.removeItem(TOKEN_KEY);
+  window.wfhInvalidateSession = async function wfhInvalidateSession(message) {
     enteredApp = false;
-    window.__attendanceToken = null;
+    window.__attendanceSupabase = null;
     window.__attendanceUser = null;
-    window.__attendanceApiBase = "";
     if (mainApp) {
       mainApp.hidden = true;
     }
@@ -218,17 +202,37 @@
     }
     setMessage(
       message ||
-        "Your sign-in is no longer valid (wrong secret, expired token, or account reset). Please sign in again.",
+        "Your session is no longer valid. Please sign in again.",
       true,
     );
+    if (supabaseClient) {
+      try {
+        await supabaseClient.auth.signOut();
+      } catch (e) {
+        console.error(e);
+      }
+    }
   };
 
   async function init() {
-    const cfg = window.WFH_API;
+    const cfg = window.WFH_SUPABASE;
     if (!isConfigReady(cfg)) {
       showConfigMissing();
       return;
     }
+
+    const createClient = window.supabase?.createClient;
+    if (typeof createClient !== "function") {
+      setMessage("Supabase library failed to load.", true);
+      return;
+    }
+
+    supabaseClient = createClient(String(cfg.url).trim(), String(cfg.anonKey).trim(), {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+    });
 
     if (authToggle) {
       authToggle.addEventListener("click", () => {
@@ -240,7 +244,22 @@
       authForm.addEventListener("submit", handleSubmit);
     }
 
-    await tryResumeSession();
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+
+    if (session?.user) {
+      await enterApp(supabaseClient, session.user);
+    }
+
+    supabaseClient.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        await enterApp(supabaseClient, session.user);
+      }
+      if (event === "SIGNED_OUT") {
+        leaveApp();
+      }
+    });
   }
 
   window.wfhSignOut = async function wfhSignOut() {
@@ -251,7 +270,9 @@
         console.error(e);
       }
     }
-    sessionStorage.removeItem(TOKEN_KEY);
+    if (supabaseClient) {
+      await supabaseClient.auth.signOut();
+    }
     leaveApp();
   };
 

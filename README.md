@@ -2,32 +2,45 @@
 
 Track office vs WFH days, annual leave, and NWD on a calendar with England & Wales bank holidays.
 
-**Database:** [PostgreSQL](https://www.postgresql.org/) on [Railway](https://railway.app). The browser app talks to a small **Node API** in `server/` (JWT auth + JSON in `public.app_state`). Railway hosts both Postgres and the API.
+**Stack:** static site (this repo) on **[Vercel](https://vercel.com)** + **[Supabase](https://supabase.com)** (managed **PostgreSQL**, Auth, Row Level Security). The browser uses the Supabase JS client; there is **no** custom Node API in this repo.
 
-## One-time setup (Railway)
+## 1. Supabase
 
-1. **Postgres:** Create a Railway **PostgreSQL** resource. Open **Query** (or any SQL client), paste `postgres/schema.sql`, and run it.
-2. **API service:** Create an **empty** service from this GitHub repo. Set **Root Directory** to `server`. Under **Variables**, add:
-   - `DATABASE_URL` — use **Reference** to the Postgres plugin’s `DATABASE_URL`.
-   - `JWT_SECRET` — a long random string (16+ characters).
-   - `CORS_ORIGIN` — the exact browser origin(s) allowed to call the API, comma-separated (no trailing slashes), e.g. `https://yourname.github.io,http://localhost:8080` for GitHub Pages + local testing.
-3. Deploy and copy the service **public URL** (HTTPS).
+1. Create a project (free tier is fine).
+2. **Project Settings → API** — copy **Project URL** and **anon public** key into `config.js` (from `config.example.js`).
+3. **SQL Editor** — paste and run `supabase/schema.sql` (creates `app_state` + RLS).
+4. **Authentication → URL configuration** — add:
+   - your **Vercel production URL** (e.g. `https://your-app.vercel.app`),
+   - and `http://localhost:PORT` for local testing.
+5. Optional while testing: **Authentication → Providers → Email** — turn off **Confirm email** so sign-up can sign in immediately.
 
-## Frontend config
+## 2. Vercel
 
-1. Copy `config.example.js` to `config.js`.
-2. Set `window.WFH_API.baseUrl` to your API URL (no trailing slash), e.g. `https://wfh-api-production-xxxx.up.railway.app`.
-3. Serve the static files (GitHub Pages, `npx serve .`, etc.) and reload the app. Register once; data syncs to Postgres after each change (debounced) and on sign-out.
+1. Import this GitHub repo into Vercel.
+2. **Framework preset:** Other (static), or leave default — no build command required; `index.html` is at the repo root.
+3. Ensure `config.js` exists for deploys:
+   - Easiest: create `config.js` locally (gitignored) and use **Vercel → Settings → Environment Variables** only if you add a small build step later; **or** commit `config.js` with **only** the public anon key (Supabase anon key is designed to be public in the client; still use **RLS** so data stays per-user).
 
-## Local development
+## 3. Local preview
 
-- **API:** `cd server && cp .env.example .env` — fill `DATABASE_URL`, `JWT_SECRET`, and `CORS_ORIGIN` (e.g. `http://127.0.0.1:3001` if the static site runs on port 3001). Run `npm install` and `npm start` (default port `3000`).
-- **Static app:** Point `config.js` at `http://localhost:3000` if the API is local; ensure that origin is listed in `CORS_ORIGIN` on the server.
+```bash
+npx serve .
+```
 
-## GitHub Pages
+Open the printed `http://localhost:…` URL, add that origin under Supabase Auth URLs, and use the same `config.js` values.
 
-Enable Pages from `main` (root). Set `CORS_ORIGIN` on Railway to `https://<user>.github.io` (origin has no repo path). Put the same Railway API URL in `config.js` in the repo (or use a private fork pattern if you prefer not to commit `config.js`—then use a build step or Pages secrets; simplest is committing `config.js` with only the public API URL).
+## Git commits in Cursor
 
-## Migrating from Supabase
+If **Commit** fails with **“Bad status code: 401”** / `git-editor.sh`, that is Cursor’s commit editor, not your app. This repo includes **`.vscode/settings.json`** with `git.useEditorAsCommitInput: true` so commits should use the **Source Control message box** instead of that editor. Reload the window after pulling.
 
-Older setups used Supabase. This repo now targets **Railway Postgres + the included API** only. Supabase accounts and rows are **not** moved automatically; register again on the new stack or export/import manually if you need old data.
+If it still fails:
+
+1. **Cursor:** sign out and sign back in (account menu).
+2. **Terminal** (in the project folder):  
+   `git commit -m "Describe your change"`  
+3. Or set a simple editor once for this repo:  
+   `git config core.editor nano`
+
+## Migrating from Railway
+
+If you previously used the Railway + `server/` API, that data is **not** moved automatically. Create a Supabase project, run the SQL above, and **register again** (or export/import manually).

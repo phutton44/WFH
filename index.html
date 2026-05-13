@@ -14,16 +14,16 @@
         <div id="auth-config-error" class="auth-config-error" hidden>
           <p class="auth-config-error-title">Sign-in is not connected yet</p>
           <p class="muted">
-            This app saves your data to <strong>PostgreSQL</strong> on <a href="https://railway.app" target="_blank" rel="noopener noreferrer">Railway</a>, via a small API you deploy. Once the API URL is in <code>config.js</code>, you can register and sign in with email and password.
+            Data is stored in <strong>PostgreSQL</strong> on <a href="https://supabase.com" target="_blank" rel="noopener noreferrer">Supabase</a> (free tier is fine). The site can be hosted on <strong>Vercel</strong> or opened locally.
           </p>
           <ol class="auth-config-steps">
-            <li>In Railway, add a <strong>PostgreSQL</strong> database, open <strong>Query</strong> (or connect with psql), and run <code>postgres/schema.sql</code>.</li>
-            <li>Create a new <strong>empty service</strong>, connect the same repo, set <strong>Root Directory</strong> to <code>server</code>, and add env vars: <code>DATABASE_URL</code> (reference the Postgres plugin), <code>JWT_SECRET</code> (long random string), and <code>CORS_ORIGIN</code> (your site URL, e.g. GitHub Pages origin).</li>
-            <li>Deploy, copy the service <strong>public HTTPS URL</strong> into <code>config.js</code> as <code>WFH_API.baseUrl</code> (see <code>config.example.js</code>).</li>
-            <li>Reload this page.</li>
+            <li>Create a Supabase project → <strong>Project Settings → API</strong> → copy <strong>Project URL</strong> and <strong>anon public</strong> key into <code>config.js</code> (see <code>config.example.js</code>).</li>
+            <li>Supabase → <strong>SQL Editor</strong> → paste and run <code>supabase/schema.sql</code>.</li>
+            <li>Supabase → <strong>Authentication → URL configuration</strong> → add your <strong>Vercel URL</strong> (and <code>http://localhost:…</code> for local testing) to redirect allow-list.</li>
+            <li>Deploy this repo on <a href="https://vercel.com" target="_blank" rel="noopener noreferrer">Vercel</a> (import from GitHub, leave defaults for a static site) and reload your live URL.</li>
           </ol>
           <p class="muted small">
-            Local dev: API may use <code>http://localhost:3000</code>; set the same origin in <code>CORS_ORIGIN</code> on the server.
+            Tip: under <strong>Authentication → Providers → Email</strong>, turn off “Confirm email” while testing so new accounts can sign in immediately.
           </p>
         </div>
         <form id="auth-form" class="auth-form" autocomplete="on">
@@ -158,8 +158,9 @@
       </main>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script>
-      window.WFH_API = window.WFH_API || { baseUrl: "" };
+      window.WFH_SUPABASE = window.WFH_SUPABASE || { url: "", anonKey: "" };
     </script>
     <script src="./config.js"></script>
     <script src="./auth.js"></script>
