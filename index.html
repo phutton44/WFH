@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>In-Office Attendance Tracker</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="auth-gate" class="auth-gate">
+      <div class="auth-panel">
+        <h1 class="auth-title">In-Office Attendance Tracker</h1>
+        <p class="auth-lead muted">Sign in with your email to sync profiles to your account.</p>
+        <div id="auth-config-error" class="auth-config-error" hidden>
+          <p class="auth-config-error-title">Sign-in is not connected yet</p>
+          <p class="muted">
+            This app saves your data to a free <a href="https://supabase.com" target="_blank" rel="noopener noreferrer">Supabase</a> database. Once connected, you can register and sign in with email and password.
+          </p>
+          <ol class="auth-config-steps">
+            <li>Create a project (free tier is fine).</li>
+            <li>Open <strong>Project Settings → API</strong> and copy the <strong>Project URL</strong> and <strong>anon public</strong> key into <code>config.js</code> (see <code>config.example.js</code>).</li>
+            <li>Open <strong>SQL Editor</strong>, paste the contents of <code>supabase/schema.sql</code>, and run it.</li>
+            <li>Reload this page.</li>
+          </ol>
+          <p class="muted small">
+            Tip: under <strong>Authentication → Providers → Email</strong>, turn off “Confirm email” while testing so new accounts can sign in right away.
+          </p>
+        </div>
+        <form id="auth-form" class="auth-form" autocomplete="on">
+          <label class="auth-label">
+            Email
+            <input id="auth-email" name="email" type="email" required autocomplete="email" />
+          </label>
+          <label class="auth-label">
+            Password
+            <input
+              id="auth-password"
+              name="password"
+              type="password"
+              required
+              minlength="6"
+              autocomplete="current-password"
+            />
+          </label>
+          <button id="auth-submit" type="submit" class="auth-submit">Sign in</button>
+        </form>
+        <p id="auth-message" class="auth-message" role="status"></p>
+        <button type="button" id="auth-toggle-mode" class="auth-toggle muted">Need an account? Register</button>
+      </div>
+    </div>
+
+    <div class="app-shell" id="main-app" hidden>
+      <header class="topbar">
+        <div class="topbar-main">
+          <div class="brand-row">
+            <div class="brand-icon" aria-hidden="true">
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <rect x="4" y="6" width="32" height="28" rx="4" stroke="currentColor" stroke-width="2" />
+                <path d="M4 14h32M12 6v28" stroke="currentColor" stroke-width="2" />
+                <circle cx="22" cy="22" r="4" fill="currentColor" opacity="0.35" />
+              </svg>
+            </div>
+            <div class="brand-titles">
+              <h1>In-Office Attendance Tracker</h1>
+            </div>
+            <div class="profile-inline">
+              <span id="account-email" class="account-email muted" aria-live="polite"></span>
+              <button type="button" id="sign-out-button" class="btn-sign-out">Sign out</button>
+              <span id="profile-created" class="profile-created muted" aria-live="polite"></span>
+              <div class="profile-row">
+                <label for="profile-select" class="profile-inline-label">Profile</label>
+                <select id="profile-select"></select>
+                <button id="add-profile-button" type="button">Add profile</button>
+              </div>
+            </div>
+          </div>
+          <div id="kpi-strip" class="kpi-strip" aria-label="Year-to-date office, WFH, and leave summaries"></div>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="panel panel-dashboard">
+          <div class="panel-head">
+            <h2>Dashboard</h2>
+          </div>
+          <div class="cards" id="dashboard-cards"></div>
+        </section>
+
+        <section class="panel calendar-panel">
+          <div class="calendar-header">
+            <button id="prev-month" type="button">Previous</button>
+            <div class="calendar-title-wrap">
+              <h2 id="month-title"></h2>
+            </div>
+            <div class="calendar-year-picker">
+              <label for="calendar-year-select" class="calendar-year-label muted">Year</label>
+              <select id="calendar-year-select" aria-label="Jump to calendar year"></select>
+            </div>
+            <button id="next-month" type="button">Next</button>
+          </div>
+          <div class="weekday-row" id="weekday-row"></div>
+          <div class="calendar-grid" id="calendar-grid"></div>
+          <div id="calendar-bulk-bar" class="calendar-bulk-bar" hidden></div>
+          <div class="calendar-key" aria-labelledby="calendar-key-heading">
+            <h3 id="calendar-key-heading" class="calendar-key-title">Day types</h3>
+            <ul class="calendar-key-list">
+              <li class="calendar-key-item">
+                <span class="lg lg-office">Office</span>
+                <p class="calendar-key-desc muted">Working day you marked as physically in the office.</p>
+              </li>
+              <li class="calendar-key-item">
+                <span class="lg lg-wfh">WFH</span>
+                <p class="calendar-key-desc muted">Working day you marked as working from home (explicit WFH only).</p>
+              </li>
+              <li class="calendar-key-item">
+                <span class="lg lg-leave">Leave</span>
+                <p class="calendar-key-desc muted">Annual leave on this date; counts toward your yearly allowance.</p>
+              </li>
+              <li class="calendar-key-item">
+                <span class="lg lg-sickness">Sickness</span>
+                <p class="calendar-key-desc muted">Paid or unpaid sick leave; does not use annual leave; excluded from office/WFH tracked totals like leave.</p>
+              </li>
+              <li class="calendar-key-item">
+                <span class="lg lg-unassigned">Unassigned</span>
+                <p class="calendar-key-desc muted">Monday–Friday working day with no office, WFH, leave, sickness, or NWD yet.</p>
+              </li>
+              <li class="calendar-key-item">
+                <span class="lg lg-nwd">NWD</span>
+                <p class="calendar-key-desc muted">Non-working day you marked on the calendar; excluded from office/WFH and leave totals like a weekend.</p>
+              </li>
+              <li class="calendar-key-item">
+                <span class="lg lg-bh">Bank hol.</span>
+                <p class="calendar-key-desc muted">England &amp; Wales public holiday on a weekday (non-working).</p>
+              </li>
+              <li class="calendar-key-item">
+                <span class="lg lg-off">Weekend</span>
+                <p class="calendar-key-desc muted">Saturday or Sunday (always non-working).</p>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="panel panel-settings">
+          <h2>Settings</h2>
+          <form id="settings-form">
+            <label>
+              Target %
+              <input id="target-input" type="number" min="0" max="100" step="0.1" />
+            </label>
+            <label>
+              Annual Leave Allowance
+              <input id="leave-allowance-input" type="number" min="0" step="1" />
+            </label>
+            <button type="submit">Save settings</button>
+            <p id="settings-message" class="muted"></p>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script>
+      window.WFH_SUPABASE = window.WFH_SUPABASE || { url: "", anonKey: "" };
+    </script>
+    <script src="./config.js"></script>
+    <script src="./auth.js"></script>
+    <script src="./script.js"></script>
+  </body>
+</html>
