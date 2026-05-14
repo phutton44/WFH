@@ -1632,9 +1632,15 @@ async function loadBankHolidays() {
 }
 
 window.startAttendanceApp = async function startAttendanceApp({ user }) {
+  if (typeof window.wfhDebugLog === "function") {
+    window.wfhDebugLog("startAttendanceApp", { email: user?.email });
+  }
   window.__attendanceUser = user;
 
   await hydrateStateFromCloud(user);
+  if (typeof window.wfhDebugLog === "function") {
+    window.wfhDebugLog("hydrateStateFromCloud:done");
+  }
 
   const token =
     window.__attendanceToken ||
@@ -1663,7 +1669,15 @@ window.startAttendanceApp = async function startAttendanceApp({ user }) {
 
   if (!appBootstrapped) {
     appBootstrapped = true;
-    await bootstrap();
+    try {
+      await bootstrap();
+    } catch (bootErr) {
+      console.error("[WFH] bootstrap failed:", bootErr);
+      appBootstrapped = false;
+      throw new Error(
+        bootErr?.message || "The calendar failed to start. Try refreshing the page.",
+      );
+    }
   } else {
     renderAll();
   }

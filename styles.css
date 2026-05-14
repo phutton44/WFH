@@ -45,6 +45,13 @@ body {
   padding: 1.5rem;
 }
 
+/* Author `display:flex` must not beat the HTML `hidden` attribute (login gate can stay visible otherwise). */
+.auth-gate[hidden],
+#auth-gate[hidden],
+#main-app[hidden] {
+  display: none !important;
+}
+
 .auth-panel {
   width: 100%;
   max-width: 22rem;

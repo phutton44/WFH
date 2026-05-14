@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "build": "node scripts/write-config-from-env.cjs",
-    "db:apply": "node scripts/apply-neon-schema.cjs"
+    "db:apply": "node scripts/apply-neon-schema.cjs",
+    "test": "node scripts/test-api-e2e.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

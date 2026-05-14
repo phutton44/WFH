@@ -21,6 +21,27 @@
   let mode = "signin";
   let enteredApp = false;
 
+  function envDebug() {
+    try {
+      if (window.WFH_DEBUG === true) {
+        return true;
+      }
+      if (window.sessionStorage?.getItem("WFH_DEBUG") === "1") {
+        return true;
+      }
+    } catch {
+      /* ignore */
+    }
+    return false;
+  }
+
+  window.wfhDebugLog = function wfhDebugLog(...args) {
+    if (!envDebug()) {
+      return;
+    }
+    console.log("[WFH]", ...args);
+  };
+
   function apiUrl(path) {
     const base = String(window.WFH_API?.apiBase ?? "")
       .trim()
@@ -64,6 +85,7 @@
       headers,
       body,
     });
+    wfhDebugLog("apiFetch", path, res.status, skipAuth ? "no-auth" : "bearer");
     const text = await res.text();
     let data = null;
     try {
@@ -156,7 +178,9 @@
   async function enterApp(user) {
     enteredApp = true;
     hideApiHelp();
+    wfhDebugLog("enterApp:start", { email: user?.email });
     if (typeof window.startAttendanceApp !== "function") {
+      console.error("[WFH] startAttendanceApp missing — is script.js loading?");
       setMessage("App failed to load. Refresh the page.", true);
       enteredApp = false;
       return;
@@ -172,8 +196,10 @@
     try {
       await window.startAttendanceApp({ user });
       setSyncBanner("");
+      wfhDebugLog("enterApp:ok");
     } catch (err) {
-      console.error(err);
+      console.error("[WFH] enterApp failed:", err);
+      wfhDebugLog("enterApp:error", err?.name, err?.message);
       setSyncBanner("");
       const friendly = err?.skipAuthMessage
         ? "We could not finish loading the app (session or server issue). Please sign in again."
@@ -211,6 +237,7 @@
 
   async function handleSubmit(event) {
     event.preventDefault();
+    wfhDebugLog("submit", mode);
     const email = (authEmail?.value || "").trim();
     const password = authPassword?.value || "";
     if (!email || !password) {

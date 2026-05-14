@@ -171,6 +171,13 @@
 
     <script>
       window.WFH_API = window.WFH_API || { apiBase: "" };
+      try {
+        if (/[?&]wfhdebug=1(?:&|$)/i.test(String(window.location.search || ""))) {
+          window.sessionStorage.setItem("WFH_DEBUG", "1");
+        }
+      } catch (e) {
+        /* ignore */
+      }
     </script>
     <script src="./config.js" onerror="window.WFH_API = window.WFH_API || { apiBase: '' }"></script>
     <script src="./auth.js"></script>
