@@ -2,7 +2,8 @@
   "name": "wfh-attendance",
   "private": true,
   "scripts": {
-    "build": "node scripts/write-config-from-env.cjs"
+    "build": "node scripts/write-config-from-env.cjs",
+    "db:apply": "node scripts/apply-neon-schema.cjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

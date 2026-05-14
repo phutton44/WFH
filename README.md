@@ -2,23 +2,23 @@
 
 Track office vs WFH days, annual leave, and NWD on a calendar with England & Wales bank holidays.
 
-**Stack:** static UI in this repo on **[Vercel](https://vercel.com)** + **[Neon](https://neon.tech)** Postgres + **serverless API** under `api/` (JWT auth, `bcryptjs`, `pg`). The browser uses `fetch` to same-origin `/api/*`; there is **no** Supabase.
+**Stack:** static UI on **[Vercel](https://vercel.com)** + managed **Postgres** (e.g. **Neon** or **Vercel Supabase / Postgres** integration) + **`api/`** serverless routes (`pg`, `bcryptjs`, `jsonwebtoken`, JWT sessions). The browser calls same-origin **`/api/*`** only.
 
-## 1. Neon
+## 1. Database
 
-1. Create a Neon project (or use the Vercel **Neon** integration so `DATABASE_URL` is set on the project).
-2. In the Neon **SQL Editor** (or any `psql` session), run **`neon/schema.sql`** once. That creates `public.users` and `public.app_state`.
+1. Connect a Postgres database to the Vercel project (Neon integration, **Supabase** integration, etc.).
+2. **Tables:** the API runs the same DDL as **`neon/schema.sql`** automatically on the first authenticated DB request (`IF NOT EXISTS`). You can still run **`neon/schema.sql`** manually in the provider’s SQL editor if you prefer.
 
 ## 2. Vercel
 
 1. Import this GitHub repo into Vercel (or link the existing project).
 2. **Build command:** `npm run build` (already set in `vercel.json`). Installs `pg`, `jsonwebtoken`, and `bcryptjs`, and writes optional root **`config.js`** from env (see below).
-3. **Environment variables** (Project → Settings → Environment Variables), for **Production** (and Preview if you use it):
+3. **Environment variables** — the API accepts the usual names **or** the Vercel **Supabase / Postgres** integration names:
 
    | Name | Notes |
    |------|--------|
-   | `DATABASE_URL` | Pooled connection string from Neon (often filled by the Neon integration). |
-   | `JWT_SECRET` | Any long random string (**at least 16 characters**). Used to sign session JWTs. |
+   | `DATABASE_URL` **or** `POSTGRES_URL` | Pooled URL (integration often sets `POSTGRES_URL`). |
+   | `JWT_SECRET` **or** `SUPABASE_JWT_SECRET` | At least **16 characters** for signing session JWTs. |
 
 4. Deploy, then open `https://your-deployment.vercel.app/api/health` — you should see `{"ok":true}`.
 
@@ -50,8 +50,8 @@ You can also copy **`config.example.js`** to **`config.js`** and set `apiBase` b
 
 ## 5. Security notes
 
-- **`JWT_SECRET`** is server-only; never put it in client code.
-- **`DATABASE_URL`** is server-only; the browser never sees it.
+- **`JWT_SECRET`** / **`SUPABASE_JWT_SECRET`** is server-only; never put it in client code.
+- **`DATABASE_URL`** / **`POSTGRES_URL`** is server-only; the browser never sees it.
 - Passwords are stored as **bcrypt** hashes in `public.users`. Each user has one **`app_state`** row (`payload` JSONB).
 
 ## Git commits in Cursor

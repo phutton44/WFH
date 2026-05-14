@@ -1,6 +1,6 @@
 "use strict";
 
-const { getPool, requireAuth } = require("../_shared.js");
+const { getPool, requireAuth, ensureAppSchema } = require("../_shared.js");
 
 module.exports = async (req, res) => {
   if (req.method !== "GET") {
@@ -12,6 +12,7 @@ module.exports = async (req, res) => {
     return res.status(auth.status).json({ error: auth.error });
   }
   try {
+    await ensureAppSchema();
     const { rows } = await getPool().query(`select id, email from public.users where id = $1`, [auth.userId]);
     const user = rows[0];
     if (!user) {

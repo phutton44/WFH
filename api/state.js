@@ -1,11 +1,18 @@
 "use strict";
 
-const { getPool, requireAuth } = require("../_shared.js");
+const { getPool, requireAuth, ensureAppSchema } = require("../_shared.js");
 
 module.exports = async (req, res) => {
   const auth = requireAuth(req);
   if (auth.error) {
     return res.status(auth.status).json({ error: auth.error });
+  }
+
+  try {
+    await ensureAppSchema();
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Database unavailable" });
   }
 
   if (req.method === "GET") {

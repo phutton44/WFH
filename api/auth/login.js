@@ -1,7 +1,7 @@
 "use strict";
 
 const bcrypt = require("bcryptjs");
-const { getPool, signToken, normalizeEmail } = require("../_shared.js");
+const { getPool, signToken, normalizeEmail, ensureAppSchema } = require("../_shared.js");
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
@@ -22,6 +22,7 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: "Email and password required" });
   }
   try {
+    await ensureAppSchema();
     const { rows } = await getPool().query(
       `select id, email, password_hash from public.users where lower(email) = lower($1)`,
       [email],
