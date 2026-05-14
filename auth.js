@@ -251,8 +251,10 @@
         setMessage(err?.message || "Something went wrong.", true);
       }
     } finally {
-      authSubmit.disabled = false;
-      authSubmit.textContent = defaultSubmitLabel;
+      if (authSubmit) {
+        authSubmit.disabled = false;
+        authSubmit.textContent = defaultSubmitLabel;
+      }
       if (authForm) {
         authForm.removeAttribute("aria-busy");
       }
