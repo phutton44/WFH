@@ -27,8 +27,6 @@ const calendarGrid = document.getElementById("calendar-grid");
 const weekdayRow = document.getElementById("weekday-row");
 const dashboardCards = document.getElementById("dashboard-cards");
 const kpiStrip = document.getElementById("kpi-strip");
-const profileSelect = document.getElementById("profile-select");
-const addProfileButton = document.getElementById("add-profile-button");
 const prevMonthButton = document.getElementById("prev-month");
 const nextMonthButton = document.getElementById("next-month");
 const settingsForm = document.getElementById("settings-form");
@@ -159,28 +157,6 @@ function attachEvents() {
     });
   }
 
-  addProfileButton.addEventListener("click", () => {
-    const name = window.prompt("Profile name:");
-    if (!name || !name.trim()) {
-      return;
-    }
-    const profile = createDefaultProfile(name.trim());
-    state.profiles.push(profile);
-    state.activeProfileId = profile.id;
-    clearCalendarSelection();
-    bulkFeedbackMessage = "";
-    saveState();
-    renderAll();
-  });
-
-  profileSelect.addEventListener("change", (event) => {
-    state.activeProfileId = event.target.value;
-    clearCalendarSelection();
-    bulkFeedbackMessage = "";
-    saveState();
-    renderAll();
-  });
-
   settingsForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const profile = getActiveProfile();
@@ -202,7 +178,6 @@ function renderAll() {
   if (!state || !state.profiles?.length) {
     state = loadStateFromLocalStorage();
   }
-  renderProfileSelect();
   renderProfileCreated();
   renderKpiStrip();
   renderDashboard();
@@ -290,20 +265,6 @@ function renderCalendarBulkBar() {
       </div>
     </div>
     ${feedbackHtml}`;
-}
-
-function renderProfileSelect() {
-  if (!profileSelect || !state?.profiles?.length) {
-    return;
-  }
-  profileSelect.innerHTML = "";
-  state.profiles.forEach((profile) => {
-    const option = document.createElement("option");
-    option.value = profile.id;
-    option.textContent = profile.name;
-    option.selected = profile.id === state.activeProfileId;
-    profileSelect.append(option);
-  });
 }
 
 function renderProfileCreated() {
