@@ -99,6 +99,12 @@
     window.__attendanceUser = null;
   }
 
+  /** Drop globals only so a refresh can retry `/api/auth/me` without re-entering password. */
+  function clearInMemoryAuth() {
+    window.__attendanceToken = null;
+    window.__attendanceUser = null;
+  }
+
   async function enterApp(user) {
     if (enteredApp) {
       return;
@@ -237,12 +243,49 @@
     }
     window.__attendanceToken = token;
     window.__attendanceUser = user;
-    const { ok, data } = await apiFetch("/api/auth/me", { method: "GET" });
+
+    let ok;
+    let status = 0;
+    let data = null;
+    try {
+      const res = await apiFetch("/api/auth/me", { method: "GET" });
+      ok = res.ok;
+      status = res.status;
+      data = res.data;
+    } catch (err) {
+      console.error(err);
+      if (err?.name === "TypeError" && String(err.message).includes("fetch")) {
+        showApiHelp();
+        setMessage("Could not reach the API. Use `vercel dev` locally or deploy to Vercel.", true);
+      } else {
+        showApiHelp();
+        setMessage("Could not verify your session (network error). Your saved login was kept; try refreshing.", true);
+      }
+      clearInMemoryAuth();
+      return;
+    }
+
     if (ok && data?.user) {
       persistSession(token, data.user);
       await enterApp(data.user);
       return;
     }
+
+    if (status === 401 || status === 403) {
+      clearSession();
+      return;
+    }
+
+    if (status >= 500) {
+      showApiHelp();
+      setMessage(
+        "Could not verify your session (server error). Your saved login was kept—try refreshing in a moment.",
+        true,
+      );
+      clearInMemoryAuth();
+      return;
+    }
+
     clearSession();
   }
 
