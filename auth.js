@@ -16,6 +16,7 @@
   const authMessage = document.getElementById("auth-message");
   const authModeLabel = document.getElementById("auth-mode-label");
   const authConfigError = document.getElementById("auth-config-error");
+  const appSyncBanner = document.getElementById("app-sync-banner");
 
   let mode = "signin";
   let enteredApp = false;
@@ -26,6 +27,23 @@
       .replace(/\/$/, "");
     const p = path.startsWith("/") ? path : `/${path}`;
     return `${base}${p}`;
+  }
+
+  async function fetchWithTimeout(url, init = {}, timeoutMs = 28000) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...init, signal: ctrl.signal });
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        const e = new Error("Request timed out. Check your connection and try again.");
+        e.name = "TimeoutError";
+        throw e;
+      }
+      throw err;
+    } finally {
+      clearTimeout(t);
+    }
   }
 
   async function apiFetch(path, options = {}) {
@@ -41,7 +59,7 @@
       headers.Authorization = `Bearer ${token}`;
     }
     const { skipAuth: _omit, ...fetchOpts } = options;
-    const res = await fetch(apiUrl(path), {
+    const res = await fetchWithTimeout(apiUrl(path), {
       ...fetchOpts,
       headers,
       body,
@@ -54,6 +72,19 @@
       data = { error: text || "Invalid response" };
     }
     return { ok: res.ok, status: res.status, data };
+  }
+
+  function setSyncBanner(text) {
+    if (!appSyncBanner) {
+      return;
+    }
+    if (text) {
+      appSyncBanner.textContent = text;
+      appSyncBanner.hidden = false;
+    } else {
+      appSyncBanner.textContent = "";
+      appSyncBanner.hidden = true;
+    }
   }
 
   function setMessage(text, isError) {
@@ -130,18 +161,20 @@
       enteredApp = false;
       return;
     }
-    setMessage("Loading your calendar…", false);
+    setMessage("", false);
+    if (authGate) {
+      authGate.hidden = true;
+    }
+    if (mainApp) {
+      mainApp.hidden = false;
+    }
+    setSyncBanner("Loading your calendar…");
     try {
       await window.startAttendanceApp({ user });
-      setMessage("", false);
-      if (authGate) {
-        authGate.hidden = true;
-      }
-      if (mainApp) {
-        mainApp.hidden = false;
-      }
+      setSyncBanner("");
     } catch (err) {
       console.error(err);
+      setSyncBanner("");
       const friendly = err?.skipAuthMessage
         ? "We could not finish loading the app (session or server issue). Please sign in again."
         : err?.message || "Could not load your data.";
@@ -159,6 +192,7 @@
 
   function leaveApp() {
     enteredApp = false;
+    setSyncBanner("");
     if (mainApp) {
       mainApp.hidden = true;
     }
@@ -255,6 +289,9 @@
       if (err?.name === "TypeError" && String(err.message).includes("fetch")) {
         showApiHelp();
         setMessage("Could not reach the API. Use `vercel dev` locally or deploy to Vercel.", true);
+      } else if (err?.name === "TimeoutError") {
+        showApiHelp();
+        setMessage(err.message || "Request timed out. Try again.", true);
       } else {
         setMessage(err?.message || "Something went wrong.", true);
       }
@@ -275,6 +312,7 @@
   window.wfhInvalidateSession = async function wfhInvalidateSession(message) {
     enteredApp = false;
     clearSession();
+    setSyncBanner("");
     if (mainApp) {
       mainApp.hidden = true;
     }
@@ -319,6 +357,9 @@
       if (err?.name === "TypeError" && String(err.message).includes("fetch")) {
         showApiHelp();
         setMessage("Could not reach the API. Use `vercel dev` locally or deploy to Vercel.", true);
+      } else if (err?.name === "TimeoutError") {
+        showApiHelp();
+        setMessage(err.message || "Request timed out. Try again.", true);
       } else {
         showApiHelp();
         setMessage("Could not verify your session (network error). Your saved login was kept; try refreshing.", true);
