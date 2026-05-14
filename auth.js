@@ -34,12 +34,14 @@
       headers["Content-Type"] = "application/json";
       body = JSON.stringify(body);
     }
-    const token = sessionStorage.getItem(JWT_STORAGE);
+    const skipAuth = Boolean(options.skipAuth);
+    const token = skipAuth ? null : sessionStorage.getItem(JWT_STORAGE);
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
+    const { skipAuth: _omit, ...fetchOpts } = options;
     const res = await fetch(apiUrl(path), {
-      ...options,
+      ...fetchOpts,
       headers,
       body,
     });
@@ -106,9 +108,6 @@
   }
 
   async function enterApp(user) {
-    if (enteredApp) {
-      return;
-    }
     enteredApp = true;
     hideApiHelp();
     if (authGate) {
@@ -168,9 +167,14 @@
 
     try {
       if (mode === "signin") {
+        sessionStorage.removeItem(JWT_STORAGE);
+        sessionStorage.removeItem(USER_STORAGE);
+        window.__attendanceToken = null;
+        window.__attendanceUser = null;
         const { ok, status, data } = await apiFetch("/api/auth/login", {
           method: "POST",
           body: { email, password },
+          skipAuth: true,
         });
         if (!ok) {
           if (status >= 500) {
@@ -183,9 +187,14 @@
         return;
       }
 
+      sessionStorage.removeItem(JWT_STORAGE);
+      sessionStorage.removeItem(USER_STORAGE);
+      window.__attendanceToken = null;
+      window.__attendanceUser = null;
       const { ok, status, data } = await apiFetch("/api/auth/register", {
         method: "POST",
         body: { email, password },
+        skipAuth: true,
       });
       if (!ok) {
         if (status >= 500) {
@@ -273,6 +282,7 @@
 
     if (status === 401 || status === 403) {
       clearSession();
+      setMessage("Previous session expired. Sign in again.", true);
       return;
     }
 
