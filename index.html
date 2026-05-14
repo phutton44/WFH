@@ -12,19 +12,15 @@
         <h1 class="auth-title">In-Office Attendance Tracker</h1>
         <p class="auth-lead muted">Sign in with your email to sync profiles to your account.</p>
         <div id="auth-config-error" class="auth-config-error" hidden>
-          <p class="auth-config-error-title">Sign-in is not connected yet</p>
+          <p class="auth-config-error-title">API not reachable or server misconfigured</p>
           <p class="muted">
-            Data is stored in <strong>PostgreSQL</strong> on <a href="https://supabase.com" target="_blank" rel="noopener noreferrer">Supabase</a> (free tier is fine). The site can be hosted on <strong>Vercel</strong> or opened locally.
+            This app signs in against <strong>Vercel serverless routes</strong> (<code>/api/*</code>) and stores data in <strong>Neon Postgres</strong>. If you only opened static files (for example <code>npx serve .</code>), run <code>vercel dev</code> instead, or deploy to Vercel.
           </p>
           <ol class="auth-config-steps">
-            <li>Create a Supabase project → <strong>Project Settings → API</strong> → copy <strong>Project URL</strong> and <strong>anon public</strong> key into <code>config.js</code> (see <code>config.example.js</code>).</li>
-            <li>Supabase → <strong>SQL Editor</strong> → paste and run <code>supabase/schema.sql</code>.</li>
-            <li>Supabase → <strong>Authentication → URL configuration</strong> → add your <strong>Vercel URL</strong> (and <code>http://localhost:…</code> for local testing) to redirect allow-list.</li>
-            <li>Deploy this repo on <a href="https://vercel.com" target="_blank" rel="noopener noreferrer">Vercel</a> (import from GitHub, leave defaults for a static site) and reload your live URL.</li>
+            <li>In the <a href="https://neon.tech" target="_blank" rel="noopener noreferrer">Neon</a> console, run <code>neon/schema.sql</code> on your database.</li>
+            <li>In <a href="https://vercel.com" target="_blank" rel="noopener noreferrer">Vercel</a> → your project → <strong>Settings → Environment Variables</strong>: set <code>DATABASE_URL</code> (from the Neon integration) and <code>JWT_SECRET</code> (any random string, at least 16 characters). Redeploy after saving.</li>
+            <li>Confirm <code>GET /api/health</code> returns <code>{"ok":true}</code> on your deployment URL.</li>
           </ol>
-          <p class="muted small">
-            Tip: under <strong>Authentication → Providers → Email</strong>, turn off “Confirm email” while testing so new accounts can sign in immediately.
-          </p>
         </div>
         <form id="auth-form" class="auth-form" autocomplete="on">
           <label class="auth-label">
@@ -158,11 +154,10 @@
       </main>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script>
-      window.WFH_SUPABASE = window.WFH_SUPABASE || { url: "", anonKey: "" };
+      window.WFH_API = window.WFH_API || { apiBase: "" };
     </script>
-    <script src="./config.js"></script>
+    <script src="./config.js" onerror="window.WFH_API = window.WFH_API || { apiBase: '' }"></script>
     <script src="./auth.js"></script>
     <script src="./script.js"></script>
   </body>

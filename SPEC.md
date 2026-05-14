@@ -135,7 +135,7 @@ Two panels in a **responsive grid** (side by side from ~768px): shared **donut c
 
 - **Multi-user**: **profile switcher** with **created** date to the **left** of the picker (London calendar date).  
 - **Data isolated per profile** in storage.  
-- **Signed-in users**: full app state is synced to **PostgreSQL** on **Supabase** (`public.app_state`); the browser also keeps **localStorage** as cache. **Without** `config.js` (`WFH_SUPABASE`), the auth gate shows setup steps.
+- **Signed-in users**: full app state is synced to **PostgreSQL** on **Neon** (`public.app_state` via Vercel `/api/state`); the browser also keeps **localStorage** as cache. If the API is unreachable or misconfigured, the auth gate can show troubleshooting steps.
 
 ---
 
@@ -153,7 +153,7 @@ Implementation bands:
 
 ## 10. Data (high level)
 
-All profiles and marks for a signed-in user are stored as **one JSON document** in Postgres (`app_state.payload`); the app normalizes that into per-profile structures in memory. **Supabase RLS** restricts each row to `auth.uid()`.
+All profiles and marks for a signed-in user are stored as **one JSON document** in Postgres (`app_state.payload`); the app normalizes that into per-profile structures in memory. **Access control** is enforced in Vercel serverless handlers: each request carries a **JWT**; `app_state.user_id` must match the token’s user id.
 
 Per profile:
 
@@ -176,7 +176,7 @@ Legacy **`fyStartMonth`** in saved JSON is **stripped on load/save**; it is not 
 
 ## 12. Technical notes (v1)
 
-- **Storage**: browser **localStorage** (key `attendanceTracker.v1`) as cache; **PostgreSQL** on **Supabase** — table **`public.app_state`** (`user_id` → `auth.users`, **`payload` JSONB**, `updated_at`) with **RLS**; **Supabase Auth** + JS client in the browser.  
+- **Storage**: browser **localStorage** (key `attendanceTracker.v1`) as cache; **PostgreSQL** on **Neon** — tables **`public.users`** (email + password hash) and **`public.app_state`** (`user_id` → `users.id`, **`payload` JSONB**, `updated_at`); **Vercel** `api/` routes for register/login/me/state with **JWT** + **bcrypt**; the browser uses **`fetch`** only (no Supabase client).  
 - **Timezone**: **Europe/London** for “today” and month boundaries.  
 - **Export** (optional v1.1): CSV for appraisal backup.
 
@@ -194,6 +194,6 @@ Legacy **`fyStartMonth`** in saved JSON is **stripped on load/save**; it is not 
 | Target | **40%** default; per profile in settings |
 | Leave | Allowance per calendar year; logged days update views |
 | Users | Multiple local profiles |
-| Hosting / DB | **Vercel** (or any static host) + **Supabase** (Postgres + Auth + RLS) |
+| Hosting / DB | **Vercel** (static UI + `api/` serverless) + **Neon** (Postgres) |
 
 This is the **single master spec** for implementation.

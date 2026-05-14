@@ -1,8 +1,11 @@
 /**
- * Email / password via Supabase Auth; data in PostgreSQL (`app_state`) through the Supabase client.
- * Requires `config.js` (from `config.example.js`) and the Supabase JS bundle on the page.
+ * Email/password via this repo’s Vercel serverless API; attendance JSON in Neon (`app_state`).
+ * Same-origin `fetch` to `/api/*` by default; optional `window.WFH_API.apiBase` from `config.js`.
  */
 (function () {
+  const JWT_STORAGE = "WFH_JWT";
+  const USER_STORAGE = "WFH_USER";
+
   const authGate = document.getElementById("auth-gate");
   const mainApp = document.getElementById("main-app");
   const authForm = document.getElementById("auth-form");
@@ -14,8 +17,41 @@
   const authConfigError = document.getElementById("auth-config-error");
 
   let mode = "signin";
-  let supabaseClient = null;
   let enteredApp = false;
+
+  function apiUrl(path) {
+    const base = String(window.WFH_API?.apiBase ?? "")
+      .trim()
+      .replace(/\/$/, "");
+    const p = path.startsWith("/") ? path : `/${path}`;
+    return `${base}${p}`;
+  }
+
+  async function apiFetch(path, options = {}) {
+    const headers = { ...(options.headers || {}) };
+    let body = options.body;
+    if (body != null && typeof body === "object" && !(body instanceof FormData)) {
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify(body);
+    }
+    const token = sessionStorage.getItem(JWT_STORAGE);
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    const res = await fetch(apiUrl(path), {
+      ...options,
+      headers,
+      body,
+    });
+    const text = await res.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { error: text || "Invalid response" };
+    }
+    return { ok: res.ok, status: res.status, data };
+  }
 
   function setMessage(text, isError) {
     if (!authMessage) {
@@ -25,14 +61,16 @@
     authMessage.classList.toggle("auth-message--error", Boolean(isError && text));
   }
 
-  function showConfigMissing() {
+  function showApiHelp() {
     if (authConfigError) {
       authConfigError.hidden = false;
     }
-    if (authForm) {
-      authForm.hidden = true;
+  }
+
+  function hideApiHelp() {
+    if (authConfigError) {
+      authConfigError.hidden = true;
     }
-    setMessage("");
   }
 
   function setMode(next) {
@@ -47,11 +85,26 @@
     setMessage("");
   }
 
-  async function enterApp(supabase, user) {
+  function persistSession(token, user) {
+    sessionStorage.setItem(JWT_STORAGE, token);
+    sessionStorage.setItem(USER_STORAGE, JSON.stringify(user));
+    window.__attendanceToken = token;
+    window.__attendanceUser = user;
+  }
+
+  function clearSession() {
+    sessionStorage.removeItem(JWT_STORAGE);
+    sessionStorage.removeItem(USER_STORAGE);
+    window.__attendanceToken = null;
+    window.__attendanceUser = null;
+  }
+
+  async function enterApp(user) {
     if (enteredApp) {
       return;
     }
     enteredApp = true;
+    hideApiHelp();
     if (authGate) {
       authGate.hidden = true;
     }
@@ -64,16 +117,14 @@
       return;
     }
     try {
-      await window.startAttendanceApp({ supabase, user });
+      await window.startAttendanceApp({ user });
     } catch (err) {
       console.error(err);
       if (!err?.skipAuthMessage) {
         setMessage(err?.message || "Could not load your data.", true);
       }
       enteredApp = false;
-      if (supabaseClient) {
-        await supabaseClient.auth.signOut();
-      }
+      clearSession();
       if (authGate) {
         authGate.hidden = false;
       }
@@ -105,92 +156,57 @@
       setMessage("Enter email and password.", true);
       return;
     }
-    if (!supabaseClient) {
-      setMessage("Sign-in is not set up yet. See the instructions above.", true);
-      return;
-    }
 
     authSubmit.disabled = true;
     setMessage("");
 
     try {
       if (mode === "signin") {
-        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-        if (error) {
-          throw error;
-        }
-        if (data.session?.user) {
-          await enterApp(supabaseClient, data.session.user);
-          return;
-        }
-        const {
-          data: { session: recovered },
-        } = await supabaseClient.auth.getSession();
-        if (recovered?.user) {
-          await enterApp(supabaseClient, recovered.user);
-          return;
-        }
-        setMessage("Signed in…", false);
-      } else {
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
-        const { data, error } = await supabaseClient.auth.signUp({
-          email,
-          password,
-          options: origin ? { emailRedirectTo: `${origin}/` } : undefined,
+        const { ok, status, data } = await apiFetch("/api/auth/login", {
+          method: "POST",
+          body: { email, password },
         });
-        if (error) {
-          throw error;
+        if (!ok) {
+          if (status >= 500) {
+            showApiHelp();
+          }
+          throw new Error(data?.error || "Sign-in failed.");
         }
-        if (data.session?.user) {
-          await enterApp(supabaseClient, data.session.user);
-          return;
-        }
-        setMessage(
-          "Account created. Check your email and click the confirmation link, then come back and sign in. " +
-            "If nothing arrives, look in Spam—or in Supabase go to Authentication → Providers → Email and turn off “Confirm email” for instant sign-in while testing.",
-          false,
-        );
+        persistSession(data.token, data.user);
+        await enterApp(data.user);
+        return;
       }
+
+      const { ok, status, data } = await apiFetch("/api/auth/register", {
+        method: "POST",
+        body: { email, password },
+      });
+      if (!ok) {
+        if (status >= 500) {
+          showApiHelp();
+        }
+        throw new Error(data?.error || "Registration failed.");
+      }
+      persistSession(data.token, data.user);
+      await enterApp(data.user);
     } catch (err) {
-      setMessage(err?.message || "Something went wrong.", true);
+      if (err?.name === "TypeError" && String(err.message).includes("fetch")) {
+        showApiHelp();
+        setMessage("Could not reach the API. Use `vercel dev` locally or deploy to Vercel.", true);
+      } else {
+        setMessage(err?.message || "Something went wrong.", true);
+      }
     } finally {
       authSubmit.disabled = false;
     }
   }
 
-  function isConfigReady(cfg) {
-    if (!cfg) {
-      return false;
-    }
-    const url = String(cfg.url || "").trim();
-    const anonKey = String(cfg.anonKey || "").trim();
-    if (!url || !anonKey) {
-      return false;
-    }
-    if (url.includes("YOUR_PROJECT") || anonKey.includes("YOUR_SUPABASE")) {
-      return false;
-    }
-    try {
-      const u = new URL(url);
-      if (u.protocol === "https:") {
-        return true;
-      }
-      if (u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1")) {
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
-  }
-
   /**
-   * Invalid Supabase session / RLS auth failure: sign out and return to the gate.
+   * Invalid JWT or rejected session: clear storage and return to the gate.
    */
   window.wfhInvalidateSession = async function wfhInvalidateSession(message) {
     enteredApp = false;
-    window.__attendanceSupabase = null;
-    window.__attendanceUser = null;
+    clearSession();
     if (mainApp) {
       mainApp.hidden = true;
     }
@@ -201,65 +217,45 @@
       authForm.hidden = false;
     }
     setMessage(
-      message ||
-        "Your session is no longer valid. Please sign in again.",
+      message || "Your session is no longer valid. Please sign in again.",
       true,
     );
-    if (supabaseClient) {
-      try {
-        await supabaseClient.auth.signOut();
-      } catch (e) {
-        console.error(e);
-      }
-    }
   };
 
+  async function tryResumeSession() {
+    const token = sessionStorage.getItem(JWT_STORAGE);
+    const rawUser = sessionStorage.getItem(USER_STORAGE);
+    if (!token || !rawUser) {
+      return;
+    }
+    let user;
+    try {
+      user = JSON.parse(rawUser);
+    } catch {
+      clearSession();
+      return;
+    }
+    window.__attendanceToken = token;
+    window.__attendanceUser = user;
+    const { ok, data } = await apiFetch("/api/auth/me", { method: "GET" });
+    if (ok && data?.user) {
+      persistSession(token, data.user);
+      await enterApp(data.user);
+      return;
+    }
+    clearSession();
+  }
+
   async function init() {
-    const cfg = window.WFH_SUPABASE;
-    if (!isConfigReady(cfg)) {
-      showConfigMissing();
-      return;
-    }
-
-    const createClient = window.supabase?.createClient;
-    if (typeof createClient !== "function") {
-      setMessage("Supabase library failed to load.", true);
-      return;
-    }
-
-    supabaseClient = createClient(String(cfg.url).trim(), String(cfg.anonKey).trim(), {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-      },
-    });
-
     if (authToggle) {
       authToggle.addEventListener("click", () => {
         setMode(mode === "signin" ? "signup" : "signin");
       });
     }
-
     if (authForm) {
       authForm.addEventListener("submit", handleSubmit);
     }
-
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-
-    if (session?.user) {
-      await enterApp(supabaseClient, session.user);
-    }
-
-    supabaseClient.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session?.user) {
-        await enterApp(supabaseClient, session.user);
-      }
-      if (event === "SIGNED_OUT") {
-        leaveApp();
-      }
-    });
+    await tryResumeSession();
   }
 
   window.wfhSignOut = async function wfhSignOut() {
@@ -270,9 +266,7 @@
         console.error(e);
       }
     }
-    if (supabaseClient) {
-      await supabaseClient.auth.signOut();
-    }
+    clearSession();
     leaveApp();
   };
 

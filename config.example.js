@@ -1,8 +1,8 @@
 /**
- * Copy to `config.js` and set your Supabase Project URL and anon (public) key
- * from Dashboard → Project Settings → API.
+ * Copy to `config.js` if you need a non-default API origin (e.g. static site on one port,
+ * `vercel dev` API on another). On a normal Vercel deployment, `npm run build` writes
+ * this file and same-origin `/api/*` is used when `apiBase` is empty.
  */
-window.WFH_SUPABASE = {
-  url: "https://YOUR_PROJECT_REF.supabase.co",
-  anonKey: "YOUR_SUPABASE_ANON_KEY",
+window.WFH_API = {
+  apiBase: "",
 };

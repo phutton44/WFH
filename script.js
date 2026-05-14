@@ -1135,44 +1135,54 @@ function getDefaultState() {
   };
 }
 
-function supabaseAuthRelatedError(error) {
-  if (!error) {
-    return false;
-  }
-  if (error.status === 401 || error.status === 403) {
-    return true;
-  }
-  const code = String(error.code || "");
-  if (code === "PGRST301" || code === "invalid_grant") {
-    return true;
-  }
-  const msg = String(error.message || "").toLowerCase();
-  return (
-    msg.includes("jwt") ||
-    msg.includes("session") ||
-    msg.includes("not authorized") ||
-    msg.includes("invalid token")
-  );
+function cloudApiUrl(path) {
+  const base = String(window.WFH_API?.apiBase ?? "")
+    .trim()
+    .replace(/\/$/, "");
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${p}`;
 }
 
-async function hydrateStateFromSupabase(supabase, user) {
-  if (!supabase || !user?.id) {
+async function cloudApiFetch(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  let body = options.body;
+  if (body != null && typeof body === "object" && !(body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify(body);
+  }
+  const token = window.__attendanceToken;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const res = await fetch(cloudApiUrl(path), { ...options, headers, body });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { error: text || "Invalid response" };
+  }
+  return { ok: res.ok, status: res.status, data };
+}
+
+function isCloudSessionAuthFailure(status) {
+  return status === 401 || status === 403;
+}
+
+async function hydrateStateFromCloud(user) {
+  const token = window.__attendanceToken;
+  if (!token || !user?.id) {
     state = loadStateFromLocalStorage();
     return;
   }
   try {
-    const { data, error } = await supabase
-      .from("app_state")
-      .select("payload")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (error) {
-      console.error(error);
+    const { ok, status, data } = await cloudApiFetch("/api/state", { method: "GET" });
+    if (!ok) {
+      console.error(data);
       state = loadStateFromLocalStorage();
-      if (supabaseAuthRelatedError(error) && typeof window.wfhInvalidateSession === "function") {
+      if (isCloudSessionAuthFailure(status) && typeof window.wfhInvalidateSession === "function") {
         await window.wfhInvalidateSession(
-          "Could not load your data from Supabase (session expired or not allowed). Please sign in again.",
+          "Could not load your data (session expired or not allowed). Please sign in again.",
         );
         const authErr = new Error("SESSION_EXPIRED");
         authErr.skipAuthMessage = true;
@@ -1193,7 +1203,7 @@ async function hydrateStateFromSupabase(supabase, user) {
     }
 
     state = loadStateFromLocalStorage();
-    await flushCloudSaveInternal(supabase, user.id);
+    await flushCloudSaveInternal(user.id);
   } catch (err) {
     if (err?.skipAuthMessage) {
       throw err;
@@ -1203,24 +1213,24 @@ async function hydrateStateFromSupabase(supabase, user) {
   }
 }
 
-async function flushCloudSaveInternal(supabase, userId) {
-  if (!state || !supabase || !userId) {
+async function flushCloudSaveInternal(userId) {
+  if (!state || !userId) {
+    return;
+  }
+  const token = window.__attendanceToken;
+  if (!token) {
     return;
   }
   state.profiles.forEach(normalizeProfileMarks);
-  const { error } = await supabase.from("app_state").upsert(
-    {
-      user_id: userId,
-      payload: state,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id" },
-  );
-  if (error) {
-    console.error("Cloud save failed:", error);
-    if (supabaseAuthRelatedError(error) && typeof window.wfhInvalidateSession === "function") {
+  const { ok, status, data } = await cloudApiFetch("/api/state", {
+    method: "PUT",
+    body: { payload: state },
+  });
+  if (!ok) {
+    console.error("Cloud save failed:", data);
+    if (isCloudSessionAuthFailure(status) && typeof window.wfhInvalidateSession === "function") {
       await window.wfhInvalidateSession(
-        "Save failed: Supabase rejected the session. Please sign in again.",
+        "Save failed: the server rejected your session. Please sign in again.",
       );
     }
   }
@@ -1233,23 +1243,23 @@ function saveState() {
   state.profiles.forEach(normalizeProfileMarks);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
-  const supabase = window.__attendanceSupabase;
   const user = window.__attendanceUser;
-  if (!supabase || !user?.id) {
+  const token = window.__attendanceToken;
+  if (!token || !user?.id) {
     return;
   }
   clearTimeout(cloudSaveTimer);
   cloudSaveTimer = setTimeout(() => {
-    flushCloudSaveInternal(supabase, user.id);
+    flushCloudSaveInternal(user.id);
   }, 700);
 }
 
 window.flushAttendanceCloudNow = async function flushAttendanceCloudNow() {
   clearTimeout(cloudSaveTimer);
-  const supabase = window.__attendanceSupabase;
   const user = window.__attendanceUser;
-  if (supabase && user?.id && state) {
-    await flushCloudSaveInternal(supabase, user.id);
+  const token = window.__attendanceToken;
+  if (token && user?.id && state) {
+    await flushCloudSaveInternal(user.id);
   }
 };
 
@@ -1595,13 +1605,12 @@ async function loadBankHolidays() {
   }
 }
 
-window.startAttendanceApp = async function startAttendanceApp({ supabase, user }) {
-  window.__attendanceSupabase = supabase;
+window.startAttendanceApp = async function startAttendanceApp({ user }) {
   window.__attendanceUser = user;
 
-  await hydrateStateFromSupabase(supabase, user);
+  await hydrateStateFromCloud(user);
 
-  if (!window.__attendanceSupabase || !window.__attendanceUser?.id) {
+  if (!window.__attendanceToken || !window.__attendanceUser?.id) {
     const authErr = new Error("SESSION_EXPIRED");
     authErr.skipAuthMessage = true;
     throw authErr;
