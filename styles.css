@@ -195,6 +195,12 @@ body {
   color: var(--red);
 }
 
+.auth-password-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .auth-toggle {
   display: block;
   width: 100%;

@@ -7,7 +7,7 @@
  */
 const base = (process.env.WFH_TEST_URL || "https://wfh-one.vercel.app").replace(/\/$/, "");
 const email = `ci-e2e-${Date.now()}@example.com`;
-const password = "ci-e2e-pass-9chars";
+const password = "Ci-e2e-pass!12";
 
 async function req(method, path, { headers = {}, body } = {}) {
   const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
@@ -80,6 +80,19 @@ async function main() {
     fail(`me: expected 200 + user email, got ${me.status} ${JSON.stringify(me.data)}`);
   }
   console.log("  ✓ GET /api/auth/me");
+
+  const forgot = await req("POST", "/api/auth/forgot-password", {
+    body: { email },
+  });
+  if (forgot.status === 404) {
+    fail(
+      "forgot-password: 404 NOT_FOUND — deploy the latest API (api/auth/forgot-password.js) or point WFH_TEST_URL at an environment that includes it.",
+    );
+  }
+  if (!forgot.ok || forgot.data?.ok !== true || typeof forgot.data?.message !== "string") {
+    fail(`forgot-password: expected 200 + ok + message, got ${forgot.status} ${JSON.stringify(forgot.data)}`);
+  }
+  console.log("  ✓ POST /api/auth/forgot-password");
 
   console.log("All API checks passed.");
 }

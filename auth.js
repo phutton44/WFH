@@ -17,6 +17,12 @@
   const authModeLabel = document.getElementById("auth-mode-label");
   const authConfigError = document.getElementById("auth-config-error");
   const appSyncBanner = document.getElementById("app-sync-banner");
+  const authPasswordFields = document.getElementById("auth-password-fields");
+  const authConfirmWrap = document.getElementById("auth-confirm-wrap");
+  const authPasswordConfirm = document.getElementById("auth-password-confirm");
+  const authForgotLink = document.getElementById("auth-forgot-link");
+  const authBackFromForgot = document.getElementById("auth-back-from-forgot");
+  const authPasswordHint = document.querySelector(".auth-password-hint");
 
   let mode = "signin";
   let enteredApp = false;
@@ -137,20 +143,92 @@
     }
   }
 
+  function validatePasswordClient(p) {
+    const s = String(p || "");
+    if (s.length < 12) {
+      return "Password must be at least 12 characters.";
+    }
+    if (!/[A-Z]/.test(s)) {
+      return "Password must include at least one uppercase letter (A–Z).";
+    }
+    if (!/[!-\/:-@\[-`{-~]/.test(s)) {
+      return "Password must include a special character (e.g. ! @ # $ %).";
+    }
+    return "";
+  }
+
   function setMode(next) {
     mode = next;
-    if (authModeLabel) {
-      authModeLabel.textContent = mode === "signin" ? "Sign in" : "Create account";
-    }
-    if (authToggle) {
-      authToggle.textContent =
-        mode === "signin" ? "Need an account? Register" : "Already have an account? Sign in";
-    }
-    if (authSubmit) {
-      authSubmit.textContent = mode === "signin" ? "Sign in" : "Create account";
-    }
-    if (authPassword) {
-      authPassword.setAttribute("autocomplete", mode === "signin" ? "current-password" : "new-password");
+    if (mode === "forgot") {
+      if (authModeLabel) {
+        authModeLabel.textContent = "Reset password";
+      }
+      if (authSubmit) {
+        authSubmit.textContent = "Send reset link";
+      }
+      if (authPasswordFields) {
+        authPasswordFields.hidden = true;
+      }
+      if (authForgotLink) {
+        authForgotLink.hidden = true;
+      }
+      if (authBackFromForgot) {
+        authBackFromForgot.hidden = false;
+      }
+      if (authToggle) {
+        authToggle.hidden = true;
+      }
+      if (authPassword) {
+        authPassword.required = false;
+        authPassword.disabled = true;
+        authPassword.value = "";
+      }
+      if (authPasswordConfirm) {
+        authPasswordConfirm.required = false;
+        authPasswordConfirm.disabled = true;
+        authPasswordConfirm.value = "";
+      }
+    } else {
+      if (authPasswordFields) {
+        authPasswordFields.hidden = false;
+      }
+      if (authForgotLink) {
+        authForgotLink.hidden = mode !== "signin";
+      }
+      if (authBackFromForgot) {
+        authBackFromForgot.hidden = true;
+      }
+      if (authToggle) {
+        authToggle.hidden = false;
+      }
+      if (authPassword) {
+        authPassword.required = true;
+        authPassword.disabled = false;
+        authPassword.setAttribute("autocomplete", mode === "signin" ? "current-password" : "new-password");
+      }
+      if (authConfirmWrap) {
+        authConfirmWrap.hidden = mode !== "signup";
+      }
+      if (authPasswordHint) {
+        authPasswordHint.hidden = mode === "signin";
+      }
+      if (authPasswordConfirm) {
+        authPasswordConfirm.disabled = mode !== "signup";
+        authPasswordConfirm.required = mode === "signup";
+        if (mode !== "signup") {
+          authPasswordConfirm.value = "";
+        }
+      }
+      if (authModeLabel) {
+        authModeLabel.textContent = mode === "signin" ? "Sign in" : "Create account";
+      }
+      if (authToggle) {
+        authToggle.textContent =
+          mode === "signin" ? "Need an account? Register" : "Already have an account? Sign in";
+      }
+      if (authSubmit) {
+        authSubmit.textContent = mode === "signin" ? "Sign in" : "Create account";
+      }
     }
     setMessage("");
   }
@@ -240,21 +318,52 @@
     wfhDebugLog("submit", mode);
     const email = (authEmail?.value || "").trim();
     const password = authPassword?.value || "";
-    if (!email || !password) {
-      setMessage("Enter the email and password you used to register.", true);
+    const passwordConfirm = (authPasswordConfirm?.value || "").trim();
+
+    if (mode === "forgot") {
+      if (!email) {
+        setMessage("Enter the email you used to register.", true);
+        return;
+      }
+      if (!isValidEmail(email)) {
+        setMessage("Use your email address (with @), not a username.", true);
+        return;
+      }
+    } else {
+      if (!email || !password) {
+        setMessage("Enter the email and password.", true);
+        return;
+      }
+      if (!isValidEmail(email)) {
+        setMessage("Use your email address (with @), not a username.", true);
+        return;
+      }
+    }
+
+    const pwdErr = mode !== "forgot" ? validatePasswordClient(password) : "";
+    if (pwdErr && mode !== "forgot") {
+      setMessage(pwdErr, true);
       return;
     }
-    if (!isValidEmail(email)) {
-      setMessage("Use your email address (with @), not a username.", true);
-      return;
+    if (mode === "signup") {
+      if (password !== passwordConfirm) {
+        setMessage("Passwords do not match.", true);
+        return;
+      }
     }
 
     if (!authSubmit) {
       return;
     }
 
-    const defaultSubmitLabel = mode === "signin" ? "Sign in" : "Create account";
-    const busyLabel = mode === "signin" ? "Signing in…" : "Creating account…";
+    const defaultSubmitLabel =
+      mode === "forgot" ? "Send reset link" : mode === "signin" ? "Sign in" : "Create account";
+    const busyLabel =
+      mode === "forgot"
+        ? "Sending…"
+        : mode === "signin"
+          ? "Signing in…"
+          : "Creating account…";
     authSubmit.disabled = true;
     authSubmit.textContent = busyLabel;
     if (authForm) {
@@ -263,6 +372,22 @@
     setMessage("");
 
     try {
+      if (mode === "forgot") {
+        const { ok, status, data } = await apiFetch("/api/auth/forgot-password", {
+          method: "POST",
+          body: { email },
+          skipAuth: true,
+        });
+        if (!ok) {
+          if (status >= 500) {
+            showApiHelp();
+          }
+          throw new Error(data?.error || "Could not send reset email.");
+        }
+        setMessage(data?.message || "If that email is registered, a reset link was sent.", false);
+        return;
+      }
+
       if (mode === "signin") {
         sessionStorage.removeItem(JWT_STORAGE);
         sessionStorage.removeItem(USER_STORAGE);
@@ -421,9 +546,23 @@
   }
 
   async function init() {
+    setMode("signin");
     if (authToggle) {
       authToggle.addEventListener("click", () => {
+        if (mode === "forgot") {
+          return;
+        }
         setMode(mode === "signin" ? "signup" : "signin");
+      });
+    }
+    if (authForgotLink) {
+      authForgotLink.addEventListener("click", () => {
+        setMode("forgot");
+      });
+    }
+    if (authBackFromForgot) {
+      authBackFromForgot.addEventListener("click", () => {
+        setMode("signin");
       });
     }
     if (authForm) {

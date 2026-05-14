@@ -41,20 +41,38 @@
               placeholder="you@company.com"
             />
           </label>
-          <label class="auth-label">
-            Password
-            <input
-              id="auth-password"
-              name="password"
-              type="password"
-              required
-              minlength="6"
-              autocomplete="current-password"
-            />
-          </label>
+          <div id="auth-password-fields">
+            <p class="auth-password-hint muted">
+              Use at least <strong>12 characters</strong>, one <strong>uppercase</strong> letter, and one
+              <strong>special character</strong> (for example <code>!@#$%</code>).
+            </p>
+            <label class="auth-label">
+              Password
+              <input
+                id="auth-password"
+                name="password"
+                type="password"
+                required
+                minlength="12"
+                autocomplete="current-password"
+              />
+            </label>
+            <label class="auth-label" id="auth-confirm-wrap" hidden>
+              Confirm password
+              <input
+                id="auth-password-confirm"
+                name="password-confirm"
+                type="password"
+                minlength="12"
+                autocomplete="new-password"
+              />
+            </label>
+          </div>
           <p id="auth-message" class="auth-message"></p>
           <button id="auth-submit" type="submit" class="auth-submit">Sign in</button>
         </form>
+        <button type="button" id="auth-forgot-link" class="auth-toggle muted">Forgot password?</button>
+        <button type="button" id="auth-back-from-forgot" class="auth-toggle muted" hidden>Back to sign in</button>
         <button type="button" id="auth-toggle-mode" class="auth-toggle muted">Need an account? Register</button>
       </div>
     </div>

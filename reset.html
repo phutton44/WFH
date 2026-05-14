@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Set new password — WFH Attendance</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="auth-gate" class="auth-gate">
+      <div class="auth-panel">
+        <h1 class="auth-title">Set a new password</h1>
+        <p class="auth-lead muted">
+          Choose a new password (12+ characters, one uppercase letter, one special character), then sign in on the main page.
+        </p>
+        <form id="reset-form" class="auth-form" autocomplete="on" novalidate>
+          <label class="auth-label">
+            New password
+            <input
+              id="reset-password"
+              name="password"
+              type="password"
+              required
+              minlength="12"
+              autocomplete="new-password"
+            />
+          </label>
+          <label class="auth-label">
+            Confirm new password
+            <input
+              id="reset-password-confirm"
+              name="password-confirm"
+              type="password"
+              required
+              minlength="12"
+              autocomplete="new-password"
+            />
+          </label>
+          <p id="reset-message" class="auth-message" role="status"></p>
+          <button id="reset-submit" type="submit" class="auth-submit">Update password</button>
+        </form>
+        <p class="muted" style="margin-top: 1rem; font-size: 0.85rem">
+          <a href="./index.html">← Back to sign in</a>
+        </p>
+      </div>
+    </div>
+    <script>
+      window.WFH_API = window.WFH_API || { apiBase: "" };
+    </script>
+    <script src="./config.js" onerror="window.WFH_API = window.WFH_API || { apiBase: '' }"></script>
+    <script src="./reset.js"></script>
+  </body>
+</html>

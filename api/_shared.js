@@ -118,42 +118,71 @@ function normalizeEmail(email) {
 }
 
 let schemaDone = false;
+let resetTokenSchemaDone = false;
 
 /**
  * Idempotent DDL for `public.users` + `public.app_state` (matches `neon/schema.sql`).
  * Runs on first DB use so Vercel + managed Postgres integrations work without a manual SQL step.
  */
 async function ensureAppSchema() {
-  if (schemaDone) {
-    return;
-  }
   const pool = getPool();
   const client = await pool.connect();
   try {
-    await client.query('create extension if not exists "pgcrypto"');
-    await client.query(`
-      create table if not exists public.users (
-        id uuid primary key default gen_random_uuid(),
-        email text not null unique,
-        password_hash text not null,
-        created_at timestamptz not null default now()
-      )`);
-    await client.query(
-      `create index if not exists users_email_lower_idx on public.users (lower(email))`,
-    );
-    await client.query(`
-      create table if not exists public.app_state (
-        user_id uuid primary key references public.users (id) on delete cascade,
-        payload jsonb not null,
-        updated_at timestamptz not null default now()
-      )`);
-    await client.query(
-      `create index if not exists app_state_updated_at_idx on public.app_state (updated_at desc)`,
-    );
+    if (!schemaDone) {
+      await client.query('create extension if not exists "pgcrypto"');
+      await client.query(`
+        create table if not exists public.users (
+          id uuid primary key default gen_random_uuid(),
+          email text not null unique,
+          password_hash text not null,
+          created_at timestamptz not null default now()
+        )`);
+      await client.query(
+        `create index if not exists users_email_lower_idx on public.users (lower(email))`,
+      );
+      await client.query(`
+        create table if not exists public.app_state (
+          user_id uuid primary key references public.users (id) on delete cascade,
+          payload jsonb not null,
+          updated_at timestamptz not null default now()
+        )`);
+      await client.query(
+        `create index if not exists app_state_updated_at_idx on public.app_state (updated_at desc)`,
+      );
+      schemaDone = true;
+    }
+    if (!resetTokenSchemaDone) {
+      await client.query(`
+        create table if not exists public.password_reset_tokens (
+          id uuid primary key default gen_random_uuid(),
+          user_id uuid not null references public.users (id) on delete cascade,
+          token_hash text not null,
+          expires_at timestamptz not null,
+          used_at timestamptz,
+          created_at timestamptz not null default now()
+        )`);
+      await client.query(
+        `create index if not exists password_reset_tokens_hash_idx on public.password_reset_tokens (token_hash)`,
+      );
+      await client.query(
+        `create index if not exists password_reset_tokens_user_idx on public.password_reset_tokens (user_id)`,
+      );
+      resetTokenSchemaDone = true;
+    }
   } finally {
     client.release();
   }
-  schemaDone = true;
 }
 
-module.exports = { getPool, signToken, requireAuth, normalizeEmail, ensureAppSchema };
+function getRequestOrigin(req) {
+  const proto = String(req.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "")
+    .split(",")[0]
+    .trim();
+  if (!host) {
+    return "";
+  }
+  return `${proto}://${host}`.replace(/\/$/, "");
+}
+
+module.exports = { getPool, signToken, requireAuth, normalizeEmail, ensureAppSchema, getRequestOrigin };

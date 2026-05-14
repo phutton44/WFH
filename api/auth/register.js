@@ -2,6 +2,7 @@
 
 const bcrypt = require("bcryptjs");
 const { getPool, signToken, normalizeEmail, ensureAppSchema } = require("../_shared.js");
+const { validatePassword } = require("../passwordPolicy.js");
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
@@ -21,8 +22,9 @@ module.exports = async (req, res) => {
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ error: "Valid email required" });
   }
-  if (password.length < 6) {
-    return res.status(400).json({ error: "Password must be at least 6 characters" });
+  const pv = validatePassword(password);
+  if (!pv.ok) {
+    return res.status(400).json({ error: pv.error });
   }
   const passwordHash = bcrypt.hashSync(password, 10);
   try {

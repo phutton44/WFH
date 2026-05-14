@@ -176,7 +176,7 @@ Legacy **`fyStartMonth`** in saved JSON is **stripped on load/save**; it is not 
 
 ## 12. Technical notes (v1)
 
-- **Storage**: browser **localStorage** (key `attendanceTracker.v1`) as cache; **PostgreSQL** on **Neon** — tables **`public.users`** (email + password hash) and **`public.app_state`** (`user_id` → `users.id`, **`payload` JSONB**, `updated_at`); **Vercel** `api/` routes for register/login/me/state with **JWT** + **bcrypt**; the browser uses **`fetch`** only (no Supabase client).  
+- **Storage**: browser **localStorage** (key `attendanceTracker.v1`) as cache; **PostgreSQL** on **Neon** — tables **`public.users`** (email + password hash), **`public.app_state`** (`user_id` → `users.id`, **`payload` JSONB**, `updated_at`), and **`public.password_reset_tokens`** for one-time reset links; **Vercel** `api/` routes for register/login/me/state/forgot-password/reset-password with **JWT** + **bcrypt**; transactional email for reset links uses **[Resend](https://resend.com)** (`RESEND_API_KEY`, `RESEND_FROM_EMAIL`); the browser uses **`fetch`** only (no Supabase client).  
 - **Timezone**: **Europe/London** for “today” and month boundaries.  
 - **Export** (optional v1.1): CSV for appraisal backup.
 
