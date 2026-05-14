@@ -1,0 +1,12 @@
+{
+  "name": "wfh-attendance",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/write-config-from-env.cjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1"
+  }
+}
