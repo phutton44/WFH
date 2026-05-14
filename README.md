@@ -2,23 +2,25 @@
 
 Track office vs WFH days, annual leave, and NWD on a calendar with England & Wales bank holidays.
 
-**Stack:** static UI on **[Vercel](https://vercel.com)** + managed **Postgres** (e.g. **Neon** or **Vercel Supabase / Postgres** integration) + **`api/`** serverless routes (`pg`, `bcryptjs`, `jsonwebtoken`, JWT sessions). The browser calls same-origin **`/api/*`** only.
+**Stack:** static UI on **[Vercel](https://vercel.com)** + **[Neon](https://neon.tech)** Postgres (via the Vercel **Neon** integration or hand-set **`DATABASE_URL`**) + **`api/`** serverless routes (`pg`, `bcryptjs`, `jsonwebtoken`, JWT sessions). The browser only calls same-origin **`/api/*`** (no database client SDK in the page).
 
-## 1. Database
+## 1. Database (Neon)
 
-1. Connect a Postgres database to the Vercel project (Neon integration, **Supabase** integration, etc.).
-2. **Tables:** the API runs the same DDL as **`neon/schema.sql`** automatically on the first authenticated DB request (`IF NOT EXISTS`). You can still run **`neon/schema.sql`** manually in the provider’s SQL editor if you prefer.
+1. Add **[Neon](https://neon.tech)** to your Vercel project and connect it, or paste a Neon **pooled** connection string into **`DATABASE_URL`** under Vercel → Environment variables.
+2. **Tables:** the API applies the same DDL as **`neon/schema.sql`** automatically on the first authenticated request (`IF NOT EXISTS`). You can still run **`neon/schema.sql`** once in the Neon SQL editor if you prefer.
 
 ## 2. Vercel
 
 1. Import this GitHub repo into Vercel (or link the existing project).
 2. **Build command:** `npm run build` (already set in `vercel.json`). Installs `pg`, `jsonwebtoken`, and `bcryptjs`, and writes optional root **`config.js`** from env (see below).
-3. **Environment variables** — the API accepts the usual names **or** the Vercel **Supabase / Postgres** integration names:
+3. **Environment variables** (Neon-first; set these in Vercel → Production):
 
    | Name | Notes |
    |------|--------|
-   | `DATABASE_URL` **or** `POSTGRES_URL` | Pooled URL (integration often sets `POSTGRES_URL`). |
-   | `JWT_SECRET` **or** `SUPABASE_JWT_SECRET` | At least **16 characters** for signing session JWTs. |
+   | **`DATABASE_URL`** | Neon pooled connection string (often provided by the Neon integration). |
+   | **`JWT_SECRET`** | Any random string, **≥16 characters**, used only by **`api/`** to sign session JWTs. |
+
+   **Compatibility:** some older Vercel project templates expose **`POSTGRES_URL`** instead of `DATABASE_URL`, or **`SUPABASE_JWT_SECRET`** instead of `JWT_SECRET`. The server reads those as fallbacks so you do not have to rename env vars when moving projects—**your database is still Neon Postgres**, not the old Supabase browser client.
 
 4. Deploy, then open `https://your-deployment.vercel.app/api/health` — you should see `{"ok":true}`.
 
@@ -50,10 +52,10 @@ You can also copy **`config.example.js`** to **`config.js`** and set `apiBase` b
 
 ## 5. Security notes
 
-- **`JWT_SECRET`** / **`SUPABASE_JWT_SECRET`** is server-only; never put it in client code.
+- **`JWT_SECRET`** (or the legacy fallback name **`SUPABASE_JWT_SECRET`** on some Vercel templates) is server-only; never put it in client code.
 - **`DATABASE_URL`** / **`POSTGRES_URL`** is server-only; the browser never sees it.
 - Passwords are stored as **bcrypt** hashes in `public.users`. Each user has one **`app_state`** row (`payload` JSONB).
-- **Never commit** `.env`, `.env.local`, or any file that contains real keys. This repo **`.gitignores`** them; use **`.env.example`** as a template only. If secrets were ever committed or pasted into a ticket/chat, **rotate them** in Supabase / Vercel / Neon and consider **`git filter-repo`** (or BFG) to purge history on a private fork before wider sharing.
+- **Never commit** `.env`, `.env.local`, or any file that contains real keys. This repo **`.gitignores`** them; use **`.env.example`** as a template only. If secrets were ever committed or pasted into a ticket/chat, **rotate them** in Neon / Vercel and consider **`git filter-repo`** (or BFG) to purge history on a private fork before wider sharing.
 
 ## Git commits in Cursor
 
@@ -67,6 +69,6 @@ If it still fails:
 3. Or set a simple editor once for this repo:  
    `git config core.editor nano`
 
-## Migrating from Supabase or older stacks
+## Migrating from older hosted stacks
 
-There is **no automatic migration** of rows from Supabase `auth.users` / `app_state`. Run **`neon/schema.sql`**, deploy with env vars set, then **register a new account** (or export/import JSON manually if you kept backups).
+If you previously used **Supabase Auth + client** or another host, there is **no automatic migration** of old `auth.users` / `app_state` rows. Point Vercel at **Neon**, deploy with env vars set, then **register a new account** (or export/import JSON manually if you kept backups).

@@ -6,8 +6,8 @@ const jwt = require("jsonwebtoken");
 let pool;
 
 /**
- * Vercel Postgres / Supabase / Neon integrations often expose `POSTGRES_URL` (pooled)
- * instead of `DATABASE_URL`. Prefer explicit `DATABASE_URL` when set.
+ * Neon (and other hosts) usually set `DATABASE_URL`. Some Vercel templates expose `POSTGRES_URL`
+ * instead — treat it as the same pooled Postgres URL.
  */
 function getDatabaseUrl() {
   const candidates = [
@@ -26,7 +26,8 @@ function getDatabaseUrl() {
 }
 
 /**
- * Custom deploys use `JWT_SECRET`. Vercel Supabase integration exposes `SUPABASE_JWT_SECRET`.
+ * Prefer `JWT_SECRET`. `SUPABASE_JWT_SECRET` is only a fallback env name used by some Vercel
+ * project templates — this app does not use the Supabase JS client.
  */
 function getJwtSecretRaw() {
   const candidates = [process.env.JWT_SECRET, process.env.SUPABASE_JWT_SECRET];
@@ -85,7 +86,9 @@ function getPool() {
 function getJwtSecret() {
   const s = getJwtSecretRaw();
   if (!s || s.length < 16) {
-    throw new Error("No signing secret: set JWT_SECRET (≥16 chars) or use Supabase integration (SUPABASE_JWT_SECRET).");
+    throw new Error(
+      "No signing secret: set JWT_SECRET (≥16 chars) on Vercel, or the legacy SUPABASE_JWT_SECRET name if your template uses it.",
+    );
   }
   return s;
 }
