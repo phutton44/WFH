@@ -14,6 +14,7 @@
   const authSubmit = document.getElementById("auth-submit");
   const authToggle = document.getElementById("auth-toggle-mode");
   const authMessage = document.getElementById("auth-message");
+  const authModeLabel = document.getElementById("auth-mode-label");
   const authConfigError = document.getElementById("auth-config-error");
 
   let mode = "signin";
@@ -61,6 +62,7 @@
     }
     authMessage.textContent = text || "";
     authMessage.classList.toggle("auth-message--error", Boolean(isError && text));
+    authMessage.setAttribute("role", isError && text ? "alert" : "status");
   }
 
   function showApiHelp() {
@@ -77,12 +79,18 @@
 
   function setMode(next) {
     mode = next;
+    if (authModeLabel) {
+      authModeLabel.textContent = mode === "signin" ? "Sign in" : "Create account";
+    }
     if (authToggle) {
       authToggle.textContent =
         mode === "signin" ? "Need an account? Register" : "Already have an account? Sign in";
     }
     if (authSubmit) {
       authSubmit.textContent = mode === "signin" ? "Sign in" : "Create account";
+    }
+    if (authPassword) {
+      authPassword.setAttribute("autocomplete", mode === "signin" ? "current-password" : "new-password");
     }
     setMessage("");
   }
@@ -172,7 +180,17 @@
       return;
     }
 
+    if (!authSubmit) {
+      return;
+    }
+
+    const defaultSubmitLabel = mode === "signin" ? "Sign in" : "Create account";
+    const busyLabel = mode === "signin" ? "Signing in…" : "Creating account…";
     authSubmit.disabled = true;
+    authSubmit.textContent = busyLabel;
+    if (authForm) {
+      authForm.setAttribute("aria-busy", "true");
+    }
     setMessage("");
 
     try {
@@ -189,6 +207,11 @@
         if (!ok) {
           if (status >= 500) {
             showApiHelp();
+          }
+          if (status === 401) {
+            throw new Error(
+              "Wrong email or password — or this database is new and that account was never created here. Try Register if unsure.",
+            );
           }
           throw new Error(data?.error || "Sign-in failed.");
         }
@@ -229,6 +252,10 @@
       }
     } finally {
       authSubmit.disabled = false;
+      authSubmit.textContent = defaultSubmitLabel;
+      if (authForm) {
+        authForm.removeAttribute("aria-busy");
+      }
     }
   }
 

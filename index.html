@@ -10,7 +10,10 @@
     <div id="auth-gate" class="auth-gate">
       <div class="auth-panel">
         <h1 class="auth-title">In-Office Attendance Tracker</h1>
-        <p class="auth-lead muted">Sign in with the <strong>same email address</strong> you used to register (not a username).</p>
+        <p class="auth-lead muted">
+          Use your <strong>email address</strong> and password. If this project was given a <strong>new database</strong> on Vercel, your old account is gone — use
+          <strong>Create account</strong> once, then sign in.
+        </p>
         <div id="auth-config-error" class="auth-config-error" hidden>
           <p class="auth-config-error-title">API not reachable or server misconfigured</p>
           <p class="muted">
@@ -22,7 +25,8 @@
             <li>Confirm <code>GET /api/health</code> returns <code>{"ok":true}</code> on your deployment URL.</li>
           </ol>
         </div>
-        <form id="auth-form" class="auth-form" autocomplete="on" novalidate>
+        <form id="auth-form" class="auth-form" autocomplete="on" novalidate aria-describedby="auth-message">
+          <p id="auth-mode-label" class="auth-mode-label">Sign in</p>
           <label class="auth-label">
             Email
             <input
@@ -34,6 +38,7 @@
               required
               autocapitalize="none"
               spellcheck="false"
+              placeholder="you@company.com"
             />
           </label>
           <label class="auth-label">
@@ -47,9 +52,9 @@
               autocomplete="current-password"
             />
           </label>
+          <p id="auth-message" class="auth-message" role="status" aria-live="polite"></p>
           <button id="auth-submit" type="submit" class="auth-submit">Sign in</button>
         </form>
-        <p id="auth-message" class="auth-message" role="status"></p>
         <button type="button" id="auth-toggle-mode" class="auth-toggle muted">Need an account? Register</button>
       </div>
     </div>

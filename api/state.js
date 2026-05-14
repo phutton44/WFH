@@ -1,6 +1,6 @@
 "use strict";
 
-const { getPool, requireAuth, ensureAppSchema } = require("../_shared.js");
+const { getPool, requireAuth, ensureAppSchema } = require("./_shared.js");
 
 module.exports = async (req, res) => {
   const auth = requireAuth(req);
