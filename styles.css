@@ -52,6 +52,12 @@ body {
   display: none !important;
 }
 
+/* `.auth-label` / `.auth-toggle` set `display` and otherwise win over the UA `[hidden]` rule (equal specificity), so confirm password and “Back to sign in” stayed visible on sign-in. */
+.auth-label[hidden],
+.auth-toggle[hidden] {
+  display: none !important;
+}
+
 .auth-panel {
   width: 100%;
   max-width: 22rem;
