@@ -60,9 +60,16 @@
     if (!authMessage) {
       return;
     }
+    const urgent = Boolean(isError && text);
     authMessage.textContent = text || "";
-    authMessage.classList.toggle("auth-message--error", Boolean(isError && text));
-    authMessage.setAttribute("role", isError && text ? "alert" : "status");
+    authMessage.classList.toggle("auth-message--error", urgent);
+    if (urgent) {
+      authMessage.setAttribute("role", "alert");
+      authMessage.setAttribute("aria-live", "assertive");
+    } else {
+      authMessage.setAttribute("role", "status");
+      authMessage.setAttribute("aria-live", "polite");
+    }
   }
 
   function showApiHelp() {
