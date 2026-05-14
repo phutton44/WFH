@@ -24,6 +24,15 @@ Track office vs WFH days, annual leave, and NWD on a calendar with England & Wal
 
 4. Deploy, then open `https://your-deployment.vercel.app/api/health` — you should see `{"ok":true}`.
 
+### Cleaning up after Supabase on the same Vercel project
+
+If you previously wired **Supabase** and then moved to **Neon** (or the Cursor marketplace Neon flow), tidy the **Vercel project**, not this repo:
+
+1. **Settings → Environment variables:** delete unused **`NEXT_PUBLIC_SUPABASE_URL`**, **`NEXT_PUBLIC_SUPABASE_ANON_KEY`**, and any **`SUPABASE_SERVICE_ROLE_KEY`** (or similar). This app’s static files do not read them; leaving them around is confusing and widens the blast radius if envs leak.
+2. **Settings → Integrations:** disconnect the **Supabase** integration if it is still attached, so it does not keep syncing or re-injecting variables.
+3. **JWT:** set **`JWT_SECRET`** (≥16 characters) for this app. You may then remove **`SUPABASE_JWT_SECRET`** unless something else still expects that exact name — the API only uses `SUPABASE_JWT_SECRET` as a **fallback** when `JWT_SECRET` is unset (`api/_shared.js`).
+4. **Database URL:** ensure **`DATABASE_URL`** or **`POSTGRES_URL`** is the **Neon** pooled string from the Neon integration (or pasted manually), not an old Supabase Postgres URL.
+
 ## 3. Local full stack
 
 Static hosting alone (`npx serve .`) does **not** run the API. For auth and cloud saves locally, use the Vercel CLI:
