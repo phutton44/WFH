@@ -1,4 +1,6 @@
 const STORAGE_KEY = "attendanceTracker.v1";
+/** Must match `JWT_STORAGE` in `auth.js` (sessionStorage key for API bearer token). */
+const WFH_JWT_SESSION_KEY = "WFH_JWT";
 const HOLIDAY_FILE = "./bank-holidays-england-wales.json";
 const LONDON_TZ = "Europe/London";
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -197,6 +199,9 @@ function attachEvents() {
 }
 
 function renderAll() {
+  if (!state || !state.profiles?.length) {
+    state = loadStateFromLocalStorage();
+  }
   renderProfileSelect();
   renderProfileCreated();
   renderKpiStrip();
@@ -288,6 +293,9 @@ function renderCalendarBulkBar() {
 }
 
 function renderProfileSelect() {
+  if (!profileSelect || !state?.profiles?.length) {
+    return;
+  }
   profileSelect.innerHTML = "";
   state.profiles.forEach((profile) => {
     const option = document.createElement("option");
@@ -1143,6 +1151,24 @@ function cloudApiUrl(path) {
   return `${base}${p}`;
 }
 
+/** Avoid hanging forever on stalled serverless/network (stuck “Loading your calendar…”). */
+async function fetchWithTimeout(url, init = {}, timeoutMs = 28000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      const timeoutErr = new Error("Request timed out. Check your connection and try again.");
+      timeoutErr.name = "TimeoutError";
+      throw timeoutErr;
+    }
+    throw err;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 async function cloudApiFetch(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   let body = options.body;
@@ -1154,7 +1180,7 @@ async function cloudApiFetch(path, options = {}) {
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  const res = await fetch(cloudApiUrl(path), { ...options, headers, body });
+  const res = await fetchWithTimeout(cloudApiUrl(path), { ...options, headers, body });
   const text = await res.text();
   let data = null;
   try {
@@ -1595,7 +1621,7 @@ function isSameMonth(y1, m1, y2, m2) {
 
 async function loadBankHolidays() {
   try {
-    const response = await fetch(HOLIDAY_FILE);
+    const response = await fetchWithTimeout(HOLIDAY_FILE, {}, 15000);
     if (!response.ok) {
       throw new Error("Holiday file load failed");
     }
@@ -1610,10 +1636,16 @@ window.startAttendanceApp = async function startAttendanceApp({ user }) {
 
   await hydrateStateFromCloud(user);
 
-  if (!window.__attendanceToken || !window.__attendanceUser?.id) {
-    const authErr = new Error("SESSION_EXPIRED");
-    authErr.skipAuthMessage = true;
-    throw authErr;
+  const token =
+    window.__attendanceToken ||
+    (typeof sessionStorage !== "undefined" && sessionStorage.getItem(WFH_JWT_SESSION_KEY));
+  const userId = window.__attendanceUser?.id || user?.id;
+  if (!token || !userId) {
+    throw new Error("Your sign-in could not be completed. Please sign in again.");
+  }
+  window.__attendanceToken = token;
+  if (!window.__attendanceUser?.id && user?.id) {
+    window.__attendanceUser = user;
   }
 
   const accountEmailEl = document.getElementById("account-email");

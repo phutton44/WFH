@@ -142,9 +142,10 @@
       }
     } catch (err) {
       console.error(err);
-      if (!err?.skipAuthMessage) {
-        setMessage(err?.message || "Could not load your data.", true);
-      }
+      const friendly = err?.skipAuthMessage
+        ? "We could not finish loading the app (session or server issue). Please sign in again."
+        : err?.message || "Could not load your data.";
+      setMessage(friendly, true);
       enteredApp = false;
       clearSession();
       if (authGate) {
