@@ -9,15 +9,15 @@ const SPECIAL_RE = /[!-\/:-@\[-`{-~]/;
 function validatePassword(password) {
   const p = String(password || "");
   if (p.length < 12) {
-    return { ok: false, error: "Password must be at least 12 characters." };
+    return { ok: false, error: "Use at least 12 characters for your password." };
   }
   if (!/[A-Z]/.test(p)) {
-    return { ok: false, error: "Password must include at least one uppercase letter (A–Z)." };
+    return { ok: false, error: "Add at least one capital letter (A–Z)." };
   }
   if (!SPECIAL_RE.test(p)) {
     return {
       ok: false,
-      error: "Password must include at least one special character (e.g. ! @ # $ % ^ & *).",
+      error: "Add at least one special character (for example ! @ # $ % ^ & *).",
     };
   }
   return { ok: true };

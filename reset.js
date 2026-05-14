@@ -30,13 +30,13 @@
   function validatePassword(p) {
     const s = String(p || "");
     if (s.length < 12) {
-      return "Password must be at least 12 characters.";
+      return "Use at least 12 characters for your password.";
     }
     if (!/[A-Z]/.test(s)) {
-      return "Password must include at least one uppercase letter (A–Z).";
+      return "Add at least one capital letter (A–Z).";
     }
     if (!/[!-\/:-@\[-`{-~]/.test(s)) {
-      return "Password must include a special character (e.g. ! @ # $ %).";
+      return "Add at least one special character (for example ! @ # $ %).";
     }
     return "";
   }

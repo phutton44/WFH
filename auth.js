@@ -143,16 +143,17 @@
     }
   }
 
+  /** Rules for new passwords (register only). Sign-in accepts whatever the account was created with. */
   function validatePasswordClient(p) {
     const s = String(p || "");
     if (s.length < 12) {
-      return "Password must be at least 12 characters.";
+      return "Use at least 12 characters for your password.";
     }
     if (!/[A-Z]/.test(s)) {
-      return "Password must include at least one uppercase letter (A–Z).";
+      return "Add at least one capital letter (A–Z).";
     }
     if (!/[!-\/:-@\[-`{-~]/.test(s)) {
-      return "Password must include a special character (e.g. ! @ # $ %).";
+      return "Add at least one special character (for example ! @ # $ %).";
     }
     return "";
   }
@@ -205,6 +206,11 @@
         authPassword.required = true;
         authPassword.disabled = false;
         authPassword.setAttribute("autocomplete", mode === "signin" ? "current-password" : "new-password");
+        if (mode === "signup") {
+          authPassword.setAttribute("minlength", "12");
+        } else {
+          authPassword.removeAttribute("minlength");
+        }
       }
       if (authConfirmWrap) {
         authConfirmWrap.hidden = mode !== "signup";
@@ -215,6 +221,11 @@
       if (authPasswordConfirm) {
         authPasswordConfirm.disabled = mode !== "signup";
         authPasswordConfirm.required = mode === "signup";
+        if (mode === "signup") {
+          authPasswordConfirm.setAttribute("minlength", "12");
+        } else {
+          authPasswordConfirm.removeAttribute("minlength");
+        }
         if (mode !== "signup") {
           authPasswordConfirm.value = "";
         }
@@ -340,14 +351,18 @@
       }
     }
 
-    const pwdErr = mode !== "forgot" ? validatePasswordClient(password) : "";
-    if (pwdErr && mode !== "forgot") {
-      setMessage(pwdErr, true);
-      return;
-    }
     if (mode === "signup") {
+      const pwdErr = validatePasswordClient(password);
+      if (pwdErr) {
+        setMessage(pwdErr, true);
+        return;
+      }
+      if (!passwordConfirm) {
+        setMessage("Type your password again in “Confirm password” so we can check they match.", true);
+        return;
+      }
       if (password !== passwordConfirm) {
-        setMessage("Passwords do not match.", true);
+        setMessage("Those passwords do not match. Fix one of the fields and try again.", true);
         return;
       }
     }
