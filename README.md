@@ -53,6 +53,7 @@ You can also copy **`config.example.js`** to **`config.js`** and set `apiBase` b
 - **`JWT_SECRET`** / **`SUPABASE_JWT_SECRET`** is server-only; never put it in client code.
 - **`DATABASE_URL`** / **`POSTGRES_URL`** is server-only; the browser never sees it.
 - Passwords are stored as **bcrypt** hashes in `public.users`. Each user has one **`app_state`** row (`payload` JSONB).
+- **Never commit** `.env`, `.env.local`, or any file that contains real keys. This repo **`.gitignores`** them; use **`.env.example`** as a template only. If secrets were ever committed or pasted into a ticket/chat, **rotate them** in Supabase / Vercel / Neon and consider **`git filter-repo`** (or BFG) to purge history on a private fork before wider sharing.
 
 ## Git commits in Cursor
 
