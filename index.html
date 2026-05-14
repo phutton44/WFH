@@ -10,7 +10,7 @@
     <div id="auth-gate" class="auth-gate">
       <div class="auth-panel">
         <h1 class="auth-title">In-Office Attendance Tracker</h1>
-        <p class="auth-lead muted">Sign in with your email to sync profiles to your account.</p>
+        <p class="auth-lead muted">Sign in with the <strong>same email address</strong> you used to register (not a username).</p>
         <div id="auth-config-error" class="auth-config-error" hidden>
           <p class="auth-config-error-title">API not reachable or server misconfigured</p>
           <p class="muted">
@@ -22,10 +22,19 @@
             <li>Confirm <code>GET /api/health</code> returns <code>{"ok":true}</code> on your deployment URL.</li>
           </ol>
         </div>
-        <form id="auth-form" class="auth-form" autocomplete="on">
+        <form id="auth-form" class="auth-form" autocomplete="on" novalidate>
           <label class="auth-label">
             Email
-            <input id="auth-email" name="email" type="email" required autocomplete="email" />
+            <input
+              id="auth-email"
+              name="email"
+              type="text"
+              inputmode="email"
+              autocomplete="email"
+              required
+              autocapitalize="none"
+              spellcheck="false"
+            />
           </label>
           <label class="auth-label">
             Password

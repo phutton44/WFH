@@ -110,19 +110,21 @@
   async function enterApp(user) {
     enteredApp = true;
     hideApiHelp();
-    if (authGate) {
-      authGate.hidden = true;
-    }
-    if (mainApp) {
-      mainApp.hidden = false;
-    }
     if (typeof window.startAttendanceApp !== "function") {
       setMessage("App failed to load. Refresh the page.", true);
       enteredApp = false;
       return;
     }
+    setMessage("Loading your calendar…", false);
     try {
       await window.startAttendanceApp({ user });
+      setMessage("", false);
+      if (authGate) {
+        authGate.hidden = true;
+      }
+      if (mainApp) {
+        mainApp.hidden = false;
+      }
     } catch (err) {
       console.error(err);
       if (!err?.skipAuthMessage) {
@@ -153,12 +155,20 @@
     setMessage("Signed out.");
   }
 
+  function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     const email = (authEmail?.value || "").trim();
     const password = authPassword?.value || "";
     if (!email || !password) {
-      setMessage("Enter email and password.", true);
+      setMessage("Enter the email and password you used to register.", true);
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setMessage("Use your email address (with @), not a username.", true);
       return;
     }
 
@@ -182,6 +192,9 @@
           }
           throw new Error(data?.error || "Sign-in failed.");
         }
+        if (!data?.token || !data?.user?.id) {
+          throw new Error("Invalid response from server. Try again.");
+        }
         persistSession(data.token, data.user);
         await enterApp(data.user);
         return;
@@ -201,6 +214,9 @@
           showApiHelp();
         }
         throw new Error(data?.error || "Registration failed.");
+      }
+      if (!data?.token || !data?.user?.id) {
+        throw new Error("Invalid response from server. Try again.");
       }
       persistSession(data.token, data.user);
       await enterApp(data.user);
