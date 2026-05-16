@@ -23,9 +23,12 @@
   const authForgotLink = document.getElementById("auth-forgot-link");
   const authBackFromForgot = document.getElementById("auth-back-from-forgot");
   const authPasswordHint = document.querySelector(".auth-password-hint");
+  const authGoogleWrap = document.getElementById("auth-google-wrap");
+  const authGoogleButton = document.getElementById("auth-google-button");
 
   let mode = "signin";
   let enteredApp = false;
+  let googleButtonRendered = false;
 
   function envDebug() {
     try {
@@ -137,6 +140,92 @@
     }
   }
 
+  function googleClientId() {
+    return String(window.WFH_API?.googleClientId || "").trim();
+  }
+
+  function setGoogleBusy(isBusy) {
+    if (!authGoogleWrap) {
+      return;
+    }
+    authGoogleWrap.classList.toggle("auth-google-wrap--busy", Boolean(isBusy));
+    authGoogleWrap.setAttribute("aria-busy", isBusy ? "true" : "false");
+  }
+
+  async function handleGoogleCredential(response) {
+    const credential = String(response?.credential || "").trim();
+    if (!credential) {
+      setMessage("Google did not return a sign-in credential. Try again.", true);
+      return;
+    }
+    sessionStorage.removeItem(JWT_STORAGE);
+    sessionStorage.removeItem(USER_STORAGE);
+    window.__attendanceToken = null;
+    window.__attendanceUser = null;
+    setGoogleBusy(true);
+    setMessage("");
+    try {
+      const { ok, status, data } = await apiFetch("/api/auth/google", {
+        method: "POST",
+        body: { credential },
+        skipAuth: true,
+      });
+      if (!ok) {
+        if (status >= 500) {
+          showApiHelp();
+        }
+        throw new Error(data?.error || "Google sign-in failed.");
+      }
+      if (!data?.token || !data?.user?.id) {
+        throw new Error("Invalid response from server. Try again.");
+      }
+      persistSession(data.token, data.user);
+      await enterApp(data.user);
+    } catch (err) {
+      if (err?.name === "TypeError" && String(err.message).includes("fetch")) {
+        showApiHelp();
+        setMessage("Could not reach the API. Use `vercel dev` locally or deploy to Vercel.", true);
+      } else if (err?.name === "TimeoutError") {
+        showApiHelp();
+        setMessage(err.message || "Request timed out. Try again.", true);
+      } else {
+        setMessage(err?.message || "Google sign-in failed.", true);
+      }
+    } finally {
+      setGoogleBusy(false);
+    }
+  }
+
+  function renderGoogleButton() {
+    if (googleButtonRendered || !authGoogleButton || !authGoogleWrap) {
+      return;
+    }
+    const clientId = googleClientId();
+    if (!clientId) {
+      authGoogleWrap.hidden = true;
+      return;
+    }
+    if (!window.google?.accounts?.id) {
+      window.setTimeout(renderGoogleButton, 150);
+      return;
+    }
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: handleGoogleCredential,
+      auto_select: false,
+      cancel_on_tap_outside: true,
+    });
+    window.google.accounts.id.renderButton(authGoogleButton, {
+      theme: "outline",
+      size: "large",
+      type: "standard",
+      text: "continue_with",
+      shape: "rectangular",
+      width: 300,
+    });
+    googleButtonRendered = true;
+  }
+
   function hideApiHelp() {
     if (authConfigError) {
       authConfigError.hidden = true;
@@ -161,6 +250,9 @@
   function setMode(next) {
     mode = next;
     if (mode === "forgot") {
+      if (authGoogleWrap) {
+        authGoogleWrap.hidden = true;
+      }
       if (authModeLabel) {
         authModeLabel.textContent = "Reset password";
       }
@@ -190,6 +282,10 @@
         authPasswordConfirm.value = "";
       }
     } else {
+      if (authGoogleWrap) {
+        authGoogleWrap.hidden = !googleClientId();
+        renderGoogleButton();
+      }
       if (authPasswordFields) {
         authPasswordFields.hidden = false;
       }
@@ -584,6 +680,7 @@
       authForm.addEventListener("submit", handleSubmit);
     }
     await tryResumeSession();
+    renderGoogleButton();
   }
 
   window.wfhSignOut = async function wfhSignOut() {

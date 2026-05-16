@@ -5,4 +5,5 @@
  */
 window.WFH_API = {
   apiBase: "",
+  googleClientId: "",
 };

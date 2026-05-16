@@ -19,6 +19,7 @@ Track office vs WFH days, annual leave, and NWD on a calendar with England & Wal
    |------|--------|
    | **`DATABASE_URL`** | Neon pooled connection string (often provided by the Neon integration). |
    | **`JWT_SECRET`** | Any random string, **≥16 characters**, used only by **`api/`** to sign session JWTs. |
+   | **`GOOGLE_CLIENT_ID`** | Optional. Google OAuth **Web application** client ID for “Continue with Google”. Also accepted as **`WFH_GOOGLE_CLIENT_ID`**. Add your production and local origins in Google Cloud. |
    | **`RESEND_API_KEY`** | Optional but required to **send** reset mail. [Resend](https://resend.com) API key. |
    | **`RESEND_FROM_EMAIL`** | Optional but required to **send** reset mail. Verified sender in Resend (e.g. `App <noreply@yourdomain.com>`). Alias: **`RESEND_FROM`**. |
    | **`WFH_PUBLIC_ORIGIN`** | Optional. Full public site URL without a trailing slash (e.g. `https://your-app.vercel.app`). Used to build reset links when the request’s Host / forwarded headers are missing or wrong. |
@@ -36,6 +37,16 @@ Forgot-password uses **[Resend](https://resend.com)** only (no SMTP or other mai
 3. Set **`WFH_PUBLIC_ORIGIN`** to your live site URL (no trailing slash), e.g. `https://your-app.vercel.app`, so the reset link in the email points at **`/reset.html?token=…`** on the correct host.
 
 If those variables are missing, **`POST /api/auth/forgot-password`** still returns **200** with a generic message (no account enumeration), but no email is sent.
+
+### Google sign-in
+
+Google sign-in is optional. To enable it:
+
+1. In Google Cloud Console → APIs & Services → Credentials, create an **OAuth client ID** with application type **Web application**.
+2. Add your app origins under **Authorized JavaScript origins**, for example `https://your-app.vercel.app` and local `http://localhost:3000`.
+3. In Vercel → Environment Variables, set **`GOOGLE_CLIENT_ID`** to that client ID, then redeploy. The build writes the public client ID to `config.js`; the API also uses the same value to verify Google ID tokens server-side.
+
+Users who choose **Continue with Google** are created using Google’s verified email address and receive the same app JWT session as email/password users. Existing password users can also use Google if the Google account has the same verified email address.
 
 ### Cleaning up after Supabase on the same Vercel project
 
@@ -77,6 +88,7 @@ You can also copy **`config.example.js`** to **`config.js`** and set `apiBase` b
 - **`JWT_SECRET`** (or the legacy fallback name **`SUPABASE_JWT_SECRET`** on some Vercel templates) is server-only; never put it in client code.
 - **`DATABASE_URL`** / **`POSTGRES_URL`** is server-only; the browser never sees it.
 - Passwords are stored as **bcrypt** hashes in `public.users`. Each user has one **`app_state`** row (`payload` JSONB).
+- Google users do not need a local password; Google ID tokens are verified server-side against Google’s public signing keys and your configured `GOOGLE_CLIENT_ID`.
 - **Never commit** `.env`, `.env.local`, or any file that contains real keys. This repo **`.gitignores`** them; use **`.env.example`** as a template only. If secrets were ever committed or pasted into a ticket/chat, **rotate them** in Neon / Vercel and consider **`git filter-repo`** (or BFG) to purge history on a private fork before wider sharing.
 
 ## Git commits in Cursor

@@ -54,7 +54,8 @@ body {
 
 /* `.auth-label` / `.auth-toggle` set `display` and otherwise win over the UA `[hidden]` rule (equal specificity), so confirm password and “Back to sign in” stayed visible on sign-in. */
 .auth-label[hidden],
-.auth-toggle[hidden] {
+.auth-toggle[hidden],
+.auth-google-wrap[hidden] {
   display: none !important;
 }
 
@@ -180,6 +181,36 @@ body {
 .auth-submit:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0.95rem 0 0.8rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--border);
+}
+
+.auth-google-wrap {
+  transition: opacity 0.15s ease;
+}
+
+.auth-google-wrap--busy {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.auth-google-button {
+  min-height: 44px;
 }
 
 .auth-message {

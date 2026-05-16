@@ -134,9 +134,17 @@ async function ensureAppSchema() {
         create table if not exists public.users (
           id uuid primary key default gen_random_uuid(),
           email text not null unique,
-          password_hash text not null,
+          password_hash text,
+          google_sub text unique,
+          auth_provider text not null default 'password',
           created_at timestamptz not null default now()
         )`);
+      await client.query(`alter table public.users alter column password_hash drop not null`);
+      await client.query(`alter table public.users add column if not exists google_sub text`);
+      await client.query(`alter table public.users add column if not exists auth_provider text not null default 'password'`);
+      await client.query(
+        `create unique index if not exists users_google_sub_idx on public.users (google_sub) where google_sub is not null`,
+      );
       await client.query(
         `create index if not exists users_email_lower_idx on public.users (lower(email))`,
       );

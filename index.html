@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>In-Office Attendance Tracker</title>
     <link rel="stylesheet" href="./styles.css" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
     <div id="auth-gate" class="auth-gate">
@@ -69,6 +70,10 @@
           <p id="auth-message" class="auth-message"></p>
           <button id="auth-submit" type="submit" class="auth-submit">Sign in</button>
         </form>
+        <div id="auth-google-wrap" class="auth-google-wrap" hidden>
+          <div class="auth-divider"><span>or</span></div>
+          <div id="auth-google-button" class="auth-google-button"></div>
+        </div>
         <button type="button" id="auth-forgot-link" class="auth-toggle muted">Forgot password?</button>
         <button type="button" id="auth-back-from-forgot" class="auth-toggle muted" hidden>Back to sign in</button>
         <button type="button" id="auth-toggle-mode" class="auth-toggle muted">Need an account? Register</button>

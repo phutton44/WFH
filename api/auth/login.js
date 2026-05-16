@@ -31,6 +31,9 @@ module.exports = async (req, res) => {
     if (!row) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
+    if (!row.password_hash) {
+      return res.status(401).json({ error: "This account uses Google sign-in." });
+    }
     const match = bcrypt.compareSync(password, row.password_hash);
     if (!match) {
       return res.status(401).json({ error: "Invalid email or password" });
