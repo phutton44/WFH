@@ -100,7 +100,20 @@ By default, desktop builds set **`WFH_PUBLIC_API_BASE=https://wfh-one.vercel.app
 WFH_PUBLIC_API_BASE=https://your-app.vercel.app npm run mac:package
 ```
 
-## 6. Security notes
+## 6. iOS app (Swift)
+
+The iOS project lives at **`ios/WFHAttendanceIOS.xcodeproj`**. It is a native SwiftUI app that talks to the same Vercel/Neon backend as the web app. It supports email sign-in/register, synced attendance state, dashboard metrics, a native month planner, day-type actions, and settings.
+
+To test it:
+
+1. Open **`ios/WFHAttendanceIOS.xcodeproj`** in Xcode.
+2. Select the **`WFHAttendanceIOS`** scheme.
+3. Pick an iPhone simulator.
+4. Press **Run**.
+
+Current bundle id: **`com.paulhutton.wfhattendance.ios`**.
+
+## 7. Security notes
 
 - **`JWT_SECRET`** (or the legacy fallback name **`SUPABASE_JWT_SECRET`** on some Vercel templates) is server-only; never put it in client code.
 - **`DATABASE_URL`** / **`POSTGRES_URL`** is server-only; the browser never sees it.

@@ -4,6 +4,8 @@ config.js
 node_modules/
 dist/
 .cache/
+ios/DerivedData/
+.xcodebuildmcp/
 
 .env
 .env.local
