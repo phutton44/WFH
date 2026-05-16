@@ -1,15 +1,50 @@
 {
   "name": "wfh-attendance",
+  "version": "1.0.0",
+  "description": "In-office attendance tracker for web and desktop.",
   "private": true,
+  "main": "electron/main.cjs",
   "scripts": {
     "build": "node scripts/write-config-from-env.cjs",
+    "electron:config": "WFH_PUBLIC_API_BASE=${WFH_PUBLIC_API_BASE:-https://wfh-one.vercel.app} node scripts/write-config-from-env.cjs",
+    "electron:dev": "npm run electron:config && electron .",
+    "mac:dir": "npm run electron:config && ELECTRON_CACHE=.cache/electron ELECTRON_BUILDER_CACHE=.cache/electron-builder CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir",
+    "mac:package": "npm run electron:config && ELECTRON_CACHE=.cache/electron ELECTRON_BUILDER_CACHE=.cache/electron-builder CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac",
     "db:apply": "node scripts/apply-neon-schema.cjs",
     "test": "node scripts/test-api-e2e.mjs"
+  },
+  "build": {
+    "appId": "com.paulhutton.wfh-attendance",
+    "productName": "WFH Attendance",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "files": [
+      "api/**/*",
+      "auth.js",
+      "bank-holidays-england-wales.json",
+      "config.js",
+      "electron/**/*",
+      "index.html",
+      "reset.html",
+      "reset.js",
+      "script.js",
+      "styles.css",
+      "package.json"
+    ]
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.1",
     "resend": "^4.8.0"
+  },
+  "devDependencies": {
+    "electron": "^42.1.0",
+    "electron-builder": "^26.8.1"
   }
 }

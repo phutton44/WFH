@@ -83,7 +83,24 @@ For a normal deployment, leave it unset so `apiBase` is `""` and the app calls `
 
 You can also copy **`config.example.js`** to **`config.js`** and set `apiBase` by hand for local experiments.
 
-## 5. Security notes
+## 5. macOS desktop app (Electron)
+
+The macOS app reuses the same static frontend files and points them at the hosted Vercel API by default.
+
+```bash
+npm install
+npm run electron:dev    # run the desktop app locally
+npm run mac:dir         # build dist/mac-arm64/WFH Attendance.app
+npm run mac:package     # build DMG + ZIP installers
+```
+
+By default, desktop builds set **`WFH_PUBLIC_API_BASE=https://wfh-one.vercel.app`** before writing `config.js`. Override that if you want the desktop app to use another API:
+
+```bash
+WFH_PUBLIC_API_BASE=https://your-app.vercel.app npm run mac:package
+```
+
+## 6. Security notes
 
 - **`JWT_SECRET`** (or the legacy fallback name **`SUPABASE_JWT_SECRET`** on some Vercel templates) is server-only; never put it in client code.
 - **`DATABASE_URL`** / **`POSTGRES_URL`** is server-only; the browser never sees it.
