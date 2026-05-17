@@ -1,4 +1,6 @@
+import AuthenticationServices
 import SwiftUI
+import UIKit
 
 private let apiBase = URL(string: "https://wfh-one.vercel.app")!
 
@@ -23,6 +25,7 @@ struct ContentView: View {
         } message: {
             Text(store.errorMessage)
         }
+        .preferredColorScheme(.dark)
     }
 }
 
@@ -34,30 +37,27 @@ private struct AuthView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
+    @StateObject private var googleAuth = GoogleOAuthCoordinator()
 
     var body: some View {
         NavigationStack {
             ZStack {
-                LinearGradient(
-                    colors: [Color(hex: "07111f"), Color(hex: "102033"), Color(hex: "0b141f")],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+                Color.appBackground
+                    .ignoresSafeArea()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 26) {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("WFH Attendance")
-                                .font(.system(size: 42, weight: .bold, design: .rounded))
+                                .font(.system(size: 40, weight: .bold, design: .rounded))
                                 .foregroundStyle(.white)
                                 .minimumScaleFactor(0.75)
                             Text("Track office days, WFH, leave, sickness, and non-working days with a native calendar built for your phone.")
                                 .font(.callout)
-                                .foregroundStyle(.white.opacity(0.72))
+                                .foregroundStyle(.white.opacity(0.62))
                                 .lineSpacing(3)
                         }
-                        .padding(.top, 32)
+                        .padding(.top, 44)
 
                         VStack(spacing: 18) {
                             Picker("Mode", selection: $mode) {
@@ -106,9 +106,47 @@ private struct AuthView: View {
                             .buttonStyle(.borderedProminent)
                             .controlSize(.large)
                             .disabled(store.isBusy)
+
+                            VStack(spacing: 10) {
+                                Text("or continue with")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+
+                                HStack(spacing: 10) {
+                                    SignInWithAppleButton(.continue) { request in
+                                        request.requestedScopes = [.email]
+                                    } onCompletion: { result in
+                                        Task { await store.handleAppleSignIn(result) }
+                                    }
+                                    .signInWithAppleButtonStyle(.white)
+                                    .frame(height: 48)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                                    Button {
+                                        Task { await signInWithGoogle() }
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "g.circle.fill")
+                                                .font(.title3)
+                                            Text("Google")
+                                                .fontWeight(.semibold)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 48)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(.white)
+                                    .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                                    )
+                                }
+                                .disabled(store.isBusy)
+                            }
                         }
                         .padding(20)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                        .glassPanel(cornerRadius: 30)
                     }
                     .padding(22)
                 }
@@ -132,11 +170,83 @@ private struct AuthView: View {
             await store.signIn(email: trimmed, password: password)
         }
     }
+
+    private func signInWithGoogle() async {
+        do {
+            let idToken = try await googleAuth.signIn()
+            await store.signInWithGoogle(idToken: idToken)
+        } catch {
+            store.presentError(error.localizedDescription)
+        }
+    }
 }
 
 private enum AuthMode {
     case signIn
     case register
+}
+
+private final class GoogleOAuthCoordinator: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
+    private var session: ASWebAuthenticationSession?
+
+    func signIn() async throws -> String {
+        let clientID = Bundle.main.googleIOSClientID
+        guard !clientID.isEmpty else {
+            throw AppError.message("Google sign-in needs GOOGLE_IOS_CLIENT_ID set in the iOS app configuration.")
+        }
+        guard let callbackScheme = Bundle.main.googleIOSCallbackScheme ?? clientID.googleCallbackScheme else {
+            throw AppError.message("Google sign-in needs an iOS OAuth callback scheme configured.")
+        }
+
+        let redirectURI = "\(callbackScheme):/oauth2redirect"
+        var components = URLComponents(string: "https://accounts.google.com/o/oauth2/v2/auth")!
+        components.queryItems = [
+            URLQueryItem(name: "client_id", value: clientID),
+            URLQueryItem(name: "redirect_uri", value: redirectURI),
+            URLQueryItem(name: "response_type", value: "id_token"),
+            URLQueryItem(name: "scope", value: "openid email"),
+            URLQueryItem(name: "nonce", value: UUID().uuidString),
+            URLQueryItem(name: "prompt", value: "select_account")
+        ]
+        guard let url = components.url else {
+            throw AppError.message("Could not start Google sign-in.")
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: callbackScheme) { callbackURL, error in
+                self.session = nil
+                if let error {
+                    if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin {
+                        continuation.resume(throwing: AppError.message("Google sign-in was cancelled."))
+                    } else {
+                        continuation.resume(throwing: error)
+                    }
+                    return
+                }
+                guard let callbackURL,
+                      let token = callbackURL.fragmentParameters["id_token"],
+                      !token.isEmpty else {
+                    continuation.resume(throwing: AppError.message("Google did not return a sign-in credential. Try again."))
+                    return
+                }
+                continuation.resume(returning: token)
+            }
+            session.presentationContextProvider = self
+            session.prefersEphemeralWebBrowserSession = true
+            self.session = session
+            if !session.start() {
+                self.session = nil
+                continuation.resume(throwing: AppError.message("Could not start Google sign-in."))
+            }
+        }
+    }
+
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow } ?? ASPresentationAnchor()
+    }
 }
 
 // MARK: - Home
@@ -154,12 +264,18 @@ private struct AttendanceHomeView: View {
             .tag(HomeTab.calendar)
 
             NavigationStack {
+                KPIScreen()
+            }
+            .tabItem { Label("KPIs", systemImage: "chart.bar.xaxis") }
+            .tag(HomeTab.kpis)
+
+            NavigationStack {
                 SettingsScreen()
             }
             .tabItem { Label("Settings", systemImage: "slider.horizontal.3") }
             .tag(HomeTab.settings)
         }
-        .tint(.teal)
+        .tint(.blue)
         .overlay(alignment: .top) {
             if store.isSyncing {
                 SyncPill(text: "Syncing")
@@ -171,64 +287,247 @@ private struct AttendanceHomeView: View {
 
 private enum HomeTab {
     case calendar
+    case kpis
     case settings
+}
+
+private struct MonthHeader: View {
+    let month: Month
+    let metrics: Metrics
+    let previous: () -> Void
+    let next: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Menu {
+                        ForEach((DateHelpers.currentYear - 2)...(DateHelpers.currentYear + 3), id: \.self) { year in
+                            Button(String(year)) {}
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text(String(month.year))
+                                .font(.title3.weight(.bold))
+                            Image(systemName: "chevron.down")
+                                .font(.headline.weight(.bold))
+                        }
+                        .foregroundStyle(Color.holidayGreen)
+                    }
+
+                    Text(DateHelpers.monthNames[month.month - 1])
+                        .font(.system(size: 40, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+
+                    Text("\(metrics.workingDays) working days · \(metrics.unassigned) unassigned")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                HStack(spacing: 8) {
+                    MonthNavButton(systemName: "chevron.left", action: previous)
+                    MonthNavButton(systemName: "chevron.right", action: next)
+                }
+                .padding(.top, 2)
+            }
+        }
+    }
+}
+
+private struct MonthNavButton: View {
+    let systemName: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(Color.holidayGreen)
+                .frame(width: 36, height: 36)
+                .background(Color.cardBackgroundElevated, in: Circle())
+                .overlay {
+                    Circle()
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct MonthTargetCard: View {
+    let metrics: Metrics
+    let target: Double
+
+    var body: some View {
+        let share = metrics.officeShare ?? 0
+        let onTarget = share >= target
+        let targetOffset = CGFloat(min(max(target / 100, 0), 1))
+        let officeOffset = CGFloat(min(max(share / 100, 0), 1))
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(share, specifier: "%.0f")")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                Text("% in office")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(onTarget ? "ON TARGET" : "BELOW TARGET")
+                    .font(.caption.weight(.heavy))
+                    .tracking(1.4)
+                    .foregroundStyle(onTarget ? Color.holidayGreen : Color.sickRed)
+            }
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [.wfhPurple, .officeBlue],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                    Rectangle()
+                        .fill(Color.officeBlue)
+                        .frame(width: 2, height: 24)
+                        .offset(x: proxy.size.width * targetOffset)
+                    Circle()
+                        .fill(Color.officeBlue)
+                        .frame(width: 28, height: 28)
+                        .overlay(Circle().stroke(Color.appBackground, lineWidth: 3))
+                        .shadow(color: Color.officeBlue.opacity(0.75), radius: 10)
+                        .offset(x: max(0, min(proxy.size.width - 28, proxy.size.width * officeOffset - 14)))
+                }
+            }
+            .frame(height: 28)
+
+            HStack {
+                Label("ALL WFH", systemImage: "circle.fill")
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(Color.wfhPurple)
+                Spacer()
+                Text("↑ \(target, specifier: "%.0f")% TARGET")
+                    .font(.caption.weight(.heavy))
+                    .foregroundStyle(Color.officeBlue)
+                Spacer()
+                Label("ALL OFFICE", systemImage: "circle.fill")
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(Color.officeBlue)
+            }
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(.secondary)
+
+            Divider()
+                .overlay(Color.white.opacity(0.08))
+
+            HStack {
+                Text(targetHelpText)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.white)
+                Spacer()
+                HStack(spacing: 12) {
+                    Label("\(metrics.office)", systemImage: "square.fill")
+                        .foregroundStyle(Color.officeBlue)
+                    Label("\(metrics.wfh)", systemImage: "square.fill")
+                        .foregroundStyle(Color.wfhPurple)
+                }
+                .font(.caption.weight(.semibold))
+            }
+        }
+        .padding(10)
+        .cardStyle()
+    }
+
+    private var targetHelpText: String {
+        let needed = metrics.officeDaysNeeded(for: target)
+        if needed <= 0 {
+            return String(format: "You are on target for %.0f%%", target)
+        }
+        return String(format: "\(needed) more office day\(needed == 1 ? "" : "s") to stay on %.0f%%", target)
+    }
 }
 
 private struct CalendarScreen: View {
     @EnvironmentObject private var store: AttendanceStore
     @State private var visibleMonth = Month.current()
-    @State private var selectedDate = DateHelpers.todayISO()
+    @State private var selectedDates: Set<String> = []
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 7)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 18) {
-                HeaderCard(month: visibleMonth)
+        let metrics = store.metrics(for: visibleMonth)
+        ZStack(alignment: .bottom) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    MonthHeader(
+                        month: visibleMonth,
+                        metrics: metrics,
+                        previous: { moveMonth(-1) },
+                        next: { moveMonth(1) }
+                    )
 
-                SummaryGrid(metrics: store.metrics(for: visibleMonth))
+                    MonthTargetCard(metrics: metrics, target: store.profile.settings.targetPct)
 
-                MonthCard(
-                    month: visibleMonth,
-                    selectedDate: $selectedDate,
-                    columns: columns
+                    MonthCard(
+                        month: visibleMonth,
+                        selectedDates: $selectedDates,
+                        columns: columns,
+                        selectAllWorkingDays: {
+                            selectedDates = Set(visibleMonth.assignableDates)
+                        }
+                    )
+
+                    MonthGlanceCard(
+                        month: visibleMonth,
+                        metrics: metrics,
+                        selectAllWorkingDays: {
+                            selectedDates = Set(visibleMonth.assignableDates)
+                        }
+                    )
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+                .padding(.bottom, selectedDates.isEmpty ? 180 : 310)
+            }
+            .background(Color.appBackground.ignoresSafeArea())
+
+            if !selectedDates.isEmpty {
+                SelectionActionSheet(
+                    dates: selectedDates,
+                    apply: { kind in
+                        Task {
+                            await store.set(dates: selectedDates, to: kind)
+                            selectedDates.removeAll()
+                        }
+                    },
+                    clearEntries: {
+                        Task {
+                            await store.set(dates: selectedDates, to: .unassigned)
+                            selectedDates.removeAll()
+                        }
+                    },
+                    dismiss: { selectedDates.removeAll() }
                 )
-
-                DayActionCard(date: selectedDate)
-            }
-            .padding(16)
-        }
-        .background(Color.appBackground.ignoresSafeArea())
-        .navigationTitle("Attendance")
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    visibleMonth = visibleMonth.shifted(by: -1)
-                    selectedDate = visibleMonth.clampedSelection(selectedDate)
-                } label: {
-                    Image(systemName: "chevron.left")
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                HStack {
-                    Button {
-                        visibleMonth = Month.current()
-                        selectedDate = DateHelpers.todayISO()
-                    } label: {
-                        Text("Today")
-                    }
-                    Button {
-                        visibleMonth = visibleMonth.shifted(by: 1)
-                        selectedDate = visibleMonth.clampedSelection(selectedDate)
-                    } label: {
-                        Image(systemName: "chevron.right")
-                    }
-                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: selectedDates.isEmpty)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .toolbar(selectedDates.isEmpty ? .visible : .hidden, for: .tabBar)
         .refreshable {
             await store.loadState()
         }
+    }
+
+    private func moveMonth(_ delta: Int) {
+        visibleMonth = visibleMonth.shifted(by: delta)
+        selectedDates.removeAll()
     }
 }
 
@@ -242,9 +541,10 @@ private struct HeaderCard: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(month.title)
+                    Text(store.profile.name)
                         .font(.system(.title, design: .rounded, weight: .bold))
-                    Text(store.user?.email ?? "")
+                        .foregroundStyle(.white)
+                    Text("\(month.title) · \(store.user?.email ?? "")")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -254,7 +554,14 @@ private struct HeaderCard: View {
                     store.signOut()
                 }
                 .font(.caption.weight(.semibold))
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 9)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay {
+                    Capsule()
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                }
             }
 
             HStack(spacing: 16) {
@@ -275,7 +582,53 @@ private struct HeaderCard: View {
             }
         }
         .padding(20)
-        .cardStyle()
+        .heroPanel()
+    }
+}
+
+private struct MonthStatsStrip: View {
+    let metrics: Metrics
+    let target: Double
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                MonthChip(title: "Office", value: "\(metrics.office)", color: .officeBlue)
+                MonthChip(title: "WFH", value: "\(metrics.wfh)", color: .wfhPurple)
+                MonthChip(title: "Leave", value: "\(metrics.leave)", color: .leaveOrange)
+                MonthChip(title: "Sick", value: "\(metrics.sickness)", color: .sickRed)
+                MonthChip(
+                    title: "In office",
+                    value: metrics.officeShare.map { String(format: "%.0f%%", $0) } ?? "0%",
+                    color: (metrics.officeShare ?? 0) >= target ? .holidayGreen : .sickRed
+                )
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.horizontal, -16)
+    }
+}
+
+private struct MonthChip: View {
+    let title: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(value)
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(.white)
+            Text(title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 7)
+        .background(Color.cardBackground, in: Capsule())
     }
 }
 
@@ -288,6 +641,67 @@ private struct SummaryGrid: View {
             StatTile(title: "WFH", value: "\(metrics.wfh)", icon: "house.fill", color: .teal)
             StatTile(title: "Leave", value: "\(metrics.leave)", icon: "sun.max.fill", color: .orange)
             StatTile(title: "Open days", value: "\(metrics.unassigned)", icon: "questionmark.circle.fill", color: .blue)
+        }
+    }
+}
+
+private struct MonthStatsDashboard: View {
+    let month: Month
+    let metrics: Metrics
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Dashboard")
+                    .font(.headline.weight(.heavy))
+                    .tracking(1.4)
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Spacer()
+                Text(month.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+            }
+
+            VStack(spacing: 0) {
+                MonthStatRow(label: "Total working days", value: metrics.workingDays)
+                MonthStatRow(label: "In office", value: metrics.office)
+                MonthStatRow(label: "WFH", value: metrics.wfh)
+                MonthStatRow(label: "Annual leave", value: metrics.leave)
+                MonthStatRow(label: "Sickness", value: metrics.sickness)
+                MonthStatRow(label: "NWD", value: metrics.nwd)
+                MonthStatRow(label: "Unassigned", value: metrics.unassigned, showsDivider: false)
+            }
+            .padding(16)
+            .background(Color.cardBackgroundElevated, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .padding(18)
+        .cardStyle()
+    }
+}
+
+private struct MonthStatRow: View {
+    let label: String
+    let value: Int
+    var showsDivider = true
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(label)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(String(value))
+                    .fontWeight(.bold)
+                    .foregroundStyle(.white)
+            }
+            .font(.subheadline)
+            .padding(.vertical, 7)
+
+            if showsDivider {
+                Divider()
+                    .overlay(Color.white.opacity(0.08))
+            }
         }
     }
 }
@@ -319,51 +733,159 @@ private struct StatTile: View {
     }
 }
 
+private struct MonthSelectorCard: View {
+    @Binding var month: Month
+    @Binding var selectedDates: Set<String>
+    var showsSelectionControls = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Jump to month", systemImage: "calendar.badge.clock")
+                    .font(.headline)
+                Spacer()
+                if showsSelectionControls {
+                    Button("Clear selection") {
+                        selectedDates.removeAll()
+                    }
+                    .font(.caption.weight(.semibold))
+                    .disabled(selectedDates.isEmpty)
+                }
+            }
+
+            HStack(spacing: 12) {
+                Picker("Month", selection: monthBinding) {
+                    ForEach(1...12, id: \.self) { value in
+                        Text(DateHelpers.monthNames[value - 1]).tag(value)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity)
+
+                Picker("Year", selection: yearBinding) {
+                    ForEach((DateHelpers.currentYear - 1)...(DateHelpers.currentYear + 5), id: \.self) { value in
+                        Text(String(value)).tag(value)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 120)
+            }
+
+            if showsSelectionControls {
+                if selectedDates.isEmpty {
+                    Text("Select one or more days, then apply a day type below.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("\(selectedDates.count) day\(selectedDates.count == 1 ? "" : "s") selected")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.teal)
+                }
+            }
+        }
+        .padding(16)
+        .cardStyle()
+    }
+
+    private var monthBinding: Binding<Int> {
+        Binding {
+            month.month
+        } set: { nextMonth in
+            month = Month(year: month.year, month: nextMonth)
+            selectedDates = [month.defaultSelection()]
+        }
+    }
+
+    private var yearBinding: Binding<Int> {
+        Binding {
+            month.year
+        } set: { nextYear in
+            month = Month(year: nextYear, month: month.month)
+            selectedDates = [month.defaultSelection()]
+        }
+    }
+}
+
 private struct MonthCard: View {
     @EnvironmentObject private var store: AttendanceStore
     let month: Month
-    @Binding var selectedDate: String
+    @Binding var selectedDates: Set<String>
     let columns: [GridItem]
+    let selectAllWorkingDays: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Month planner")
-                    .font(.headline)
-                Spacer()
-                Text("Tap a day")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
-
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(DateHelpers.weekdayLabels, id: \.self) { label in
+        VStack(alignment: .leading, spacing: 6) {
+            LazyVGrid(columns: columns, spacing: 4) {
+                ForEach(Array(DateHelpers.weekdayLetters.enumerated()), id: \.offset) { _, label in
                     Text(label)
-                        .font(.caption2.weight(.bold))
+                        .font(.caption.weight(.bold))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                 }
 
                 ForEach(month.gridDays) { day in
                     if let iso = day.iso {
+                        let kind = store.kind(for: iso)
                         DayCell(
                             day: day.day,
-                            kind: store.kind(for: iso),
-                            isSelected: selectedDate == iso,
+                            kind: kind,
+                            isSelected: selectedDates.contains(iso),
                             isToday: iso == DateHelpers.todayISO()
                         )
                         .onTapGesture {
-                            selectedDate = iso
+                            guard kind != .weekend, kind != .bankHoliday else { return }
+                            if selectedDates.contains(iso) {
+                                selectedDates.remove(iso)
+                            } else {
+                                selectedDates.insert(iso)
+                            }
                         }
                     } else {
                         Color.clear
-                            .aspectRatio(1, contentMode: .fit)
+                            .frame(height: 39)
                     }
                 }
             }
+
+            CalendarLegend()
         }
-        .padding(16)
-        .cardStyle()
+    }
+}
+
+private struct CalendarLegend: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            LegendItem("Office", color: .officeBlue)
+            LegendItem("WFH", color: .wfhPurple)
+            LegendItem("Leave", color: .leaveOrange)
+            LegendItem("Sick", color: .sickRed)
+            LegendItem("NWD", color: .nwdGray)
+            LegendItem("Bank holiday", color: .holidayGreen)
+        }
+        .font(.system(size: 9, weight: .semibold))
+        .foregroundStyle(.secondary)
+        .minimumScaleFactor(0.72)
+        .lineLimit(1)
+        .padding(.top, 6)
+    }
+}
+
+private struct LegendItem: View {
+    let label: String
+    let color: Color
+
+    init(_ label: String, color: Color) {
+        self.label = label
+        self.color = color
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(color)
+                .frame(width: 10, height: 10)
+            Text(label)
+        }
     }
 }
 
@@ -376,58 +898,98 @@ private struct DayCell: View {
     var body: some View {
         VStack(spacing: 5) {
             Text("\(day)")
-                .font(.system(.body, design: .rounded, weight: isSelected ? .bold : .semibold))
-            Circle()
-                .fill(kind.color)
-                .frame(width: 6, height: 6)
-                .opacity(kind == .unassigned ? 0.28 : 1)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(kind.tileLabel)
+                .font(.system(size: 8, weight: .heavy))
+                .tracking(0.55)
+                .lineLimit(1)
+                .minimumScaleFactor(0.62)
         }
         .frame(maxWidth: .infinity)
-        .aspectRatio(1, contentMode: .fit)
-        .background(cellBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .frame(height: 39)
+        .background(cellBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay {
-            if isToday {
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color.teal.opacity(0.8), lineWidth: 1.5)
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(borderColor, lineWidth: isSelected ? 2.5 : (isToday ? 1.5 : 0))
+                if isToday {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 5, height: 5)
+                        .padding(5)
+                }
             }
         }
-        .foregroundStyle(isSelected ? .white : .primary)
+        .foregroundStyle(foregroundColor)
+        .opacity(kind == .weekend ? 0.58 : 1)
     }
 
     private var cellBackground: Color {
-        if isSelected { return .teal }
-        if kind == .weekend || kind == .bankHoliday { return Color.secondary.opacity(0.08) }
-        return kind.color.opacity(0.12)
+        if isSelected, kind == .unassigned { return Color.cardBackground.opacity(0.62) }
+        switch kind {
+        case .office:
+            return Color.officeBlue.opacity(0.82)
+        case .wfh:
+            return Color.wfhPurple.opacity(0.82)
+        case .leave:
+            return Color.leaveOrange.opacity(0.82)
+        case .sickness:
+            return Color.sickRed.opacity(0.82)
+        case .nwd:
+            return Color.nwdGray.opacity(0.45)
+        case .bankHoliday:
+            return Color.holidayGreen.opacity(0.82)
+        case .weekend:
+            return Color.clear
+        case .unassigned:
+            return Color.clear
+        }
     }
+
+    private var borderColor: Color {
+        if isSelected { return Color.holidayGreen }
+        if isToday { return Color.white.opacity(0.20) }
+        return .clear
+    }
+
+    private var foregroundColor: Color {
+        if kind == .weekend { return Color.slate }
+        if kind == .leave && isSelected { return Color.black.opacity(0.8) }
+        if kind == .unassigned { return .secondary }
+        return .white
+    }
+
+    private var todayLabel: String { isToday ? "\(day) • today" : "\(day)" }
 }
 
 private struct DayActionCard: View {
     @EnvironmentObject private var store: AttendanceStore
-    let date: String
+    let dates: Set<String>
 
     var body: some View {
-        let kind = store.kind(for: date)
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(DateHelpers.friendlyDate(date))
+                    Text(title)
                         .font(.headline)
-                    Text(kind.title)
+                    Text(subtitle)
                         .font(.subheadline)
-                        .foregroundStyle(kind.color)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Image(systemName: kind.icon)
+                Image(systemName: dates.count > 1 ? "checklist" : selectedKind.icon)
                     .font(.title2)
-                    .foregroundStyle(kind.color)
+                    .foregroundStyle(selectedKind.color)
                     .frame(width: 44, height: 44)
-                    .background(kind.color.opacity(0.14), in: RoundedRectangle(cornerRadius: 15))
+                    .background(selectedKind.color.opacity(0.14), in: RoundedRectangle(cornerRadius: 15))
             }
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                 ForEach(DayKind.actionKinds) { action in
                     Button {
-                        Task { await store.set(date: date, to: action) }
+                        Task { await store.set(dates: dates, to: action) }
                     } label: {
                         Label(action.actionTitle, systemImage: action.icon)
                             .frame(maxWidth: .infinity)
@@ -435,49 +997,1377 @@ private struct DayActionCard: View {
                     }
                     .buttonStyle(.bordered)
                     .tint(action.color)
-                    .disabled(!store.canApply(action, to: date))
+                    .disabled(dates.isEmpty || !store.canApply(action, to: dates))
                 }
             }
         }
         .padding(16)
         .cardStyle()
     }
+
+    private var title: String {
+        if dates.isEmpty { return "No days selected" }
+        if dates.count == 1, let only = dates.first {
+            return DateHelpers.friendlyDate(only)
+        }
+        return "\(dates.count) days selected"
+    }
+
+    private var subtitle: String {
+        if dates.isEmpty { return "Tap days in the calendar to begin." }
+        if dates.count == 1, let only = dates.first {
+            return store.kind(for: only).title
+        }
+        return "Apply one status to the selected dates."
+    }
+
+    private var selectedKind: DayKind {
+        guard dates.count == 1, let only = dates.first else { return .unassigned }
+        return store.kind(for: only)
+    }
+}
+
+private struct MonthGlanceCard: View {
+    let month: Month
+    let metrics: Metrics
+    let selectAllWorkingDays: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("\(DateHelpers.monthNames[month.month - 1]) at a glance")
+                    .font(.caption.weight(.heavy))
+                    .tracking(2)
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+
+                Text("\(metrics.tracked) of \(metrics.workingDays) working days tracked.")
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.white)
+
+                CompositionBar(metrics: metrics)
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    GlanceStat(label: "Office", value: metrics.office, color: .officeBlue)
+                    GlanceStat(label: "WFH", value: metrics.wfh, color: .wfhPurple)
+                    GlanceStat(label: "Leave", value: metrics.leave, color: .leaveOrange)
+                    GlanceStat(label: "Sick", value: metrics.sickness, color: .sickRed)
+                    GlanceStat(label: "NWD", value: metrics.nwd, color: .nwdGray)
+                    GlanceStat(label: "Unassigned", value: metrics.unassigned, color: .secondary)
+                }
+            }
+            .padding(11)
+            .cardStyle()
+
+            Button(action: selectAllWorkingDays) {
+                HStack {
+                    Spacer()
+                    Text("Select all working days")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.holidayGreen)
+                    Spacer()
+                    Image(systemName: "plus")
+                        .font(.system(size: 38, weight: .regular))
+                        .foregroundStyle(.white)
+                        .frame(width: 52, height: 52)
+                        .background(Color.holidayGreen, in: Circle())
+                        .shadow(color: Color.holidayGreen.opacity(0.55), radius: 22)
+                }
+                .padding(.leading, 16)
+                .padding(.trailing, 16)
+                .padding(.vertical, 6)
+                .background(Color.cardBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 6)
+        }
+    }
+}
+
+private struct CompositionBar: View {
+    let metrics: Metrics
+
+    var body: some View {
+        GeometryReader { proxy in
+            HStack(spacing: 1) {
+                Segment(count: metrics.office, total: metrics.workingDays, width: proxy.size.width, color: .officeBlue)
+                Segment(count: metrics.wfh, total: metrics.workingDays, width: proxy.size.width, color: .wfhPurple)
+                Segment(count: metrics.leave, total: metrics.workingDays, width: proxy.size.width, color: .leaveOrange)
+                Segment(count: metrics.sickness, total: metrics.workingDays, width: proxy.size.width, color: .sickRed)
+                Segment(count: metrics.nwd, total: metrics.workingDays, width: proxy.size.width, color: .nwdGray)
+                Segment(count: metrics.unassigned, total: metrics.workingDays, width: proxy.size.width, color: Color.white.opacity(0.18))
+            }
+            .clipShape(Capsule())
+            .background(Color.white.opacity(0.18), in: Capsule())
+        }
+        .frame(height: 8)
+    }
+}
+
+private struct Segment: View {
+    let count: Int
+    let total: Int
+    let width: CGFloat
+    let color: Color
+
+    var body: some View {
+        color
+            .frame(width: total > 0 ? max(count == 0 ? 0 : 2, width * CGFloat(count) / CGFloat(total)) : 0)
+    }
+}
+
+private struct GlanceStat: View {
+    let label: String
+    let value: Int
+    let color: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(color)
+                .frame(width: 3, height: 30)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("\(value)")
+                    .font(.title3.bold())
+                    .foregroundStyle(.white)
+                Text(label)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+private struct SelectionActionSheet: View {
+    let dates: Set<String>
+    let apply: (DayKind) -> Void
+    let clearEntries: () -> Void
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(dates.count) day\(dates.count == 1 ? "" : "s") selected")
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.white)
+                    Text("Tap a type to apply")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(action: dismiss) {
+                    Image(systemName: "xmark")
+                        .font(.title2)
+                        .foregroundStyle(.white)
+                        .frame(width: 46, height: 46)
+                        .background(Color.cardBackgroundElevated, in: Circle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                SheetTypeButton(kind: .office) { apply(.office) }
+                SheetTypeButton(kind: .wfh) { apply(.wfh) }
+                SheetTypeButton(kind: .leave) { apply(.leave) }
+                SheetTypeButton(kind: .sickness) { apply(.sickness) }
+                SheetTypeButton(kind: .nwd) { apply(.nwd) }
+                SheetTypeButton(kind: .unassigned, title: "Clear") { clearEntries() }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 18)
+        .padding(.bottom, 24)
+        .background(.ultraThinMaterial, in: UnevenRoundedRectangle(topLeadingRadius: 28, topTrailingRadius: 28))
+        .overlay(alignment: .bottom) {
+            Capsule()
+                .fill(Color.white.opacity(0.75))
+                .frame(width: 140, height: 5)
+                .padding(.bottom, 10)
+        }
+        .overlay {
+            UnevenRoundedRectangle(topLeadingRadius: 28, topTrailingRadius: 28)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        }
+    }
+}
+
+private struct SheetTypeButton: View {
+    let kind: DayKind
+    var title: String?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 12) {
+                Image(systemName: kind.sheetIcon)
+                    .font(.title2)
+                    .foregroundStyle(kind.color)
+                Text(title ?? kind.shortTitle)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(kind == .unassigned ? Color.sickRed : .white)
+                    .minimumScaleFactor(0.75)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 82)
+            .background(backgroundColor, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var backgroundColor: Color {
+        if kind == .unassigned { return Color.sickRed.opacity(0.22) }
+        return kind.color.opacity(0.25)
+    }
+}
+
+private struct KPIScreen: View {
+    @EnvironmentObject private var store: AttendanceStore
+    @State private var month = Month.current()
+    @State private var mode: InsightMode = .month
+
+    var body: some View {
+        let monthMetrics = store.metrics(for: month)
+        let ytdMetrics = store.yearMetrics(year: month.year)
+        let leave = store.leaveBreakdown(year: month.year)
+        let activeMetrics = mode == .yearToDate ? ytdMetrics : monthMetrics
+        let activeShare = activeMetrics.officeShare ?? 0
+        let target = store.profile.settings.targetPct
+
+        ScrollView {
+            VStack(spacing: 9) {
+                InsightsMonthHeader(
+                    month: month,
+                    mode: mode,
+                    previous: { month = month.shifted(by: -1) },
+                    next: { month = month.shifted(by: 1) },
+                    today: { month = Month.current() }
+                )
+
+                Picker("Range", selection: $mode) {
+                    Text("Month").tag(InsightMode.month)
+                    Text("Year-to-date").tag(InsightMode.yearToDate)
+                }
+                .pickerStyle(.segmented)
+
+                InsightDonutHero(
+                    month: month,
+                    metrics: activeMetrics,
+                    percent: activeShare,
+                    target: target
+                )
+
+                if mode == .month {
+                    WeekByWeekCard(month: month)
+                    CompositionListCard(title: "\(DateHelpers.monthNames[month.month - 1]) composition", metrics: monthMetrics)
+                } else {
+                    QuarterScoreboardCard(year: month.year, target: target)
+                    StreaksHabitsCard(year: month.year)
+                    AnnualLeaveGaugeCard(leave: leave)
+                    WellbeingCard(metrics: ytdMetrics, year: month.year)
+                }
+
+                if mode == .month {
+                    LeaveSnapshotCard(leave: leave)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 6)
+            .padding(.bottom, 90)
+        }
+        .background(Color.appBackground.ignoresSafeArea())
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .refreshable {
+            await store.loadState()
+        }
+    }
+}
+
+private enum InsightMode {
+    case yearToDate
+    case month
+}
+
+private struct InsightsMonthHeader: View {
+    let month: Month
+    let mode: InsightMode
+    let previous: () -> Void
+    let next: () -> Void
+    let today: () -> Void
+
+    var body: some View {
+        VStack(spacing: 7) {
+            HStack {
+                Text("Insights")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Today", action: today)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.holidayGreen.opacity(0.72))
+            }
+
+            HStack {
+                MonthNavButton(systemName: "chevron.left", action: previous)
+                Spacer()
+                VStack(spacing: 2) {
+                    Text(mode == .month ? month.title : String(month.year))
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Text(mode == .month ? "This month" : "Year-to-date")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                MonthNavButton(systemName: "chevron.right", action: next)
+            }
+        }
+    }
+}
+
+private struct InsightDonutHero: View {
+    let month: Month
+    let metrics: Metrics
+    let percent: Double
+    let target: Double
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                ZStack {
+                    DonutRing(office: metrics.office, wfh: metrics.wfh)
+                        .frame(width: 106, height: 106)
+                    Text("\(percent, specifier: "%.0f")")
+                        .font(.system(size: 31, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                    + Text("%")
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HeroKeyRow(value: metrics.office, label: "Office", color: .officeBlue)
+                    HeroKeyRow(value: metrics.wfh, label: "WFH", color: .wfhPurple)
+                    HeroKeyRow(value: metrics.tracked, label: "Worked", color: Color.white.opacity(0.78))
+                }
+                .frame(width: 92, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+
+            Text(percent >= target ? "On Target" : "Below Target")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(percent >= target ? Color.holidayGreen : Color.sickRed)
+                .padding(.top, 2)
+        }
+        .padding(11)
+        .cardStyle()
+    }
+}
+
+private struct HeroKeyRow: View {
+    let value: Int
+    let label: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(color)
+                .frame(width: 7, height: 7)
+            Text("\(value)")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 18, alignment: .leading)
+            Text(label.uppercased())
+                .font(.system(size: 8, weight: .heavy))
+                .tracking(0.5)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+private struct DonutRing: View {
+    let office: Int
+    let wfh: Int
+
+    var body: some View {
+        let total = max(office + wfh, 1)
+        let officeEnd = Double(office) / Double(total)
+        ZStack {
+            Circle()
+                .stroke(Color.cardBackgroundElevated, lineWidth: 20)
+            Circle()
+                .trim(from: 0, to: 1)
+                .stroke(Color.wfhPurple, style: StrokeStyle(lineWidth: 20, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Circle()
+                .trim(from: 0, to: officeEnd)
+                .stroke(Color.officeBlue, style: StrokeStyle(lineWidth: 20, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+    }
+}
+
+private struct WeekByWeekCard: View {
+    @EnvironmentObject private var store: AttendanceStore
+    let month: Month
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Week by week")
+                .sectionLabel()
+
+            VStack(spacing: 4) {
+                ForEach(weekRows, id: \.label) { row in
+                    HStack(spacing: 4) {
+                        Text(row.label)
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 28, alignment: .leading)
+                        ForEach(row.days, id: \.id) { cell in
+                            WeekCell(cell: cell)
+                        }
+                    }
+                }
+
+                HStack {
+                    Spacer().frame(width: 32)
+                    ForEach(Array(["M", "T", "W", "T", "F"].enumerated()), id: \.offset) { _, day in
+                        Text(day)
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            .padding(8)
+            .cardStyle()
+        }
+    }
+
+    private var weekRows: [InsightWeekRow] {
+        var rows: [InsightWeekRow] = []
+        let dates = DateHelpers.dates(from: month.startISO, through: month.endISO)
+        let grouped = Dictionary(grouping: dates.filter { !DateHelpers.isWeekend($0) }) { DateHelpers.isoWeekNumber($0) }
+        for week in grouped.keys.sorted() {
+            let weekDates = grouped[week] ?? []
+            let cells = (1...5).map { weekday -> InsightWeekCell in
+                if let iso = weekDates.first(where: { DateHelpers.weekdayNumber($0) == weekday }) {
+                    return InsightWeekCell(iso: iso, day: Int(iso.suffix(2)) ?? 0, kind: store.kind(for: iso), inMonth: true)
+                }
+                return InsightWeekCell(iso: "\(week)-\(weekday)", day: nil, kind: .unassigned, inMonth: false)
+            }
+            rows.append(InsightWeekRow(label: "W\(week)", days: cells))
+        }
+        return rows
+    }
+}
+
+private struct InsightWeekRow {
+    let label: String
+    let days: [InsightWeekCell]
+}
+
+private struct InsightWeekCell: Identifiable {
+    let iso: String
+    let day: Int?
+    let kind: DayKind
+    let inMonth: Bool
+    var id: String { iso }
+}
+
+private struct WeekCell: View {
+    let cell: InsightWeekCell
+
+    var body: some View {
+        Text(cell.day.map(String.init) ?? "")
+            .font(.caption.weight(.bold))
+            .foregroundStyle(cell.inMonth ? .white : .clear)
+            .frame(maxWidth: .infinity)
+            .frame(height: 23)
+            .background(cell.inMonth ? cell.kind.insightColor : Color.clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+    }
+}
+
+private struct WeekdayPatternCard: View {
+    @EnvironmentObject private var store: AttendanceStore
+    let month: Month
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Your week")
+                .sectionLabel()
+            HStack(alignment: .bottom, spacing: 18) {
+                ForEach(1...5, id: \.self) { weekday in
+                    let counts = counts(for: weekday)
+                    let total = max(counts.office + counts.wfh, 1)
+                    let pct = total == 0 ? 0 : Int(round(Double(counts.office) / Double(total) * 100))
+                    VStack(spacing: 8) {
+                        Text("\(pct)%")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.white)
+                        VStack(spacing: 0) {
+                            Rectangle()
+                                .fill(Color.wfhPurple)
+                                .frame(height: CGFloat(counts.wfh) / CGFloat(total) * 112)
+                            Rectangle()
+                                .fill(Color.officeBlue)
+                                .frame(height: CGFloat(counts.office) / CGFloat(total) * 112)
+                        }
+                        .frame(width: 44, height: 112, alignment: .bottom)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        Text(DateHelpers.weekdayShortName(weekday))
+                            .font(.caption.weight(.heavy))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            Divider().overlay(Color.white.opacity(0.08))
+            HStack(spacing: 24) {
+                Spacer()
+                LegendItem("Office", color: .officeBlue)
+                LegendItem("WFH", color: .wfhPurple)
+                Spacer()
+            }
+        }
+        .padding(18)
+        .cardStyle()
+    }
+
+    private func counts(for weekday: Int) -> (office: Int, wfh: Int) {
+        var office = 0
+        var wfh = 0
+        for iso in DateHelpers.dates(from: month.startISO, through: month.endISO) where DateHelpers.weekdayNumber(iso) == weekday {
+            switch store.kind(for: iso) {
+            case .office: office += 1
+            case .wfh: wfh += 1
+            default: break
+            }
+        }
+        return (office, wfh)
+    }
+}
+
+private struct CompositionListCard: View {
+    let title: String
+    let metrics: Metrics
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .sectionLabel()
+            VStack(alignment: .leading, spacing: 9) {
+                CompositionBar(metrics: metrics)
+                Text("\(metrics.tracked + metrics.leave + metrics.sickness + metrics.nwd) of \(metrics.workingDays) working days logged")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                CompositionRow(label: "Office", value: metrics.office, color: .officeBlue)
+                CompositionRow(label: "WFH", value: metrics.wfh, color: .wfhPurple)
+                CompositionRow(label: "Leave", value: metrics.leave, color: .leaveOrange)
+                CompositionRow(label: "Sick", value: metrics.sickness, color: .sickRed)
+                CompositionRow(label: "Non-working", value: metrics.nwd, color: .nwdGray)
+                CompositionRow(label: "Unassigned", value: metrics.unassigned, color: Color.white.opacity(0.20))
+            }
+            .padding(11)
+            .cardStyle()
+        }
+    }
+}
+
+private struct CompositionRow: View {
+    let label: String
+    let value: Int
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(label)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+            Spacer()
+            Text("\(value)")
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.white)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+private struct LeaveSnapshotCard: View {
+    let leave: LeaveBreakdown
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Leave snapshot")
+                .sectionLabel()
+            VStack(spacing: 0) {
+                CompositionRow(label: "Taken", value: leave.taken, color: .leaveOrange)
+                Divider().overlay(Color.white.opacity(0.08))
+                CompositionRow(label: "Booked ahead", value: leave.booked, color: .leaveOrange.opacity(0.6))
+                Divider().overlay(Color.white.opacity(0.08))
+                CompositionRow(label: "Remaining", value: leave.remaining, color: Color.white.opacity(0.20))
+            }
+            .padding(11)
+            .cardStyle()
+            Text("\(leave.allowance) day allowance · YTD")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+        }
+    }
+}
+
+private struct QuarterScoreboardCard: View {
+    @EnvironmentObject private var store: AttendanceStore
+    let year: Int
+    let target: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("By quarter")
+                .sectionLabel()
+            HStack(spacing: 10) {
+                ForEach(1...4, id: \.self) { quarter in
+                    QuarterTile(
+                        title: "Q\(quarter)",
+                        metrics: metrics(for: quarter),
+                        isCurrent: quarter == currentQuarter
+                    )
+                }
+            }
+            .padding(16)
+            .cardStyle()
+        }
+    }
+
+    private var currentQuarter: Int {
+        let current = DateHelpers.todayParts()
+        guard current.year == year else { return 0 }
+        return ((current.month - 1) / 3) + 1
+    }
+
+    private func metrics(for quarter: Int) -> Metrics? {
+        if currentQuarter > 0, quarter > currentQuarter { return nil }
+        let startMonth = (quarter - 1) * 3 + 1
+        let endMonth = startMonth + 2
+        let start = DateHelpers.iso(year: year, month: startMonth, day: 1)
+        let endOfQuarter = DateHelpers.iso(year: year, month: endMonth, day: DateHelpers.daysInMonth(year: year, month: endMonth))
+        let end = currentQuarter == quarter ? min(DateHelpers.todayISO(), endOfQuarter) : endOfQuarter
+        return store.metrics(from: start, through: end)
+    }
+}
+
+private struct QuarterTile: View {
+    let title: String
+    let metrics: Metrics?
+    let isCurrent: Bool
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(title)
+                .font(.caption.weight(.heavy))
+                .foregroundStyle(.secondary)
+            if let metrics {
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                    Text(metrics.officeShare.map { String(format: "%.0f", $0) } ?? "-")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(Color.officeBlue)
+                    Text("%")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
+                HStack(spacing: 6) {
+                    Label("\(metrics.office)", systemImage: "circle.fill")
+                        .foregroundStyle(Color.officeBlue)
+                    Label("\(metrics.wfh)", systemImage: "circle.fill")
+                        .foregroundStyle(Color.wfhPurple)
+                }
+                .font(.caption2.weight(.semibold))
+            } else {
+                Text("-")
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Label("0", systemImage: "circle.fill")
+                        .foregroundStyle(Color.officeBlue.opacity(0.45))
+                    Label("0", systemImage: "circle.fill")
+                        .foregroundStyle(Color.wfhPurple.opacity(0.45))
+                }
+                .font(.caption2.weight(.semibold))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(Color.cardBackgroundElevated.opacity(isCurrent ? 1 : 0.35), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            if isCurrent {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.18), lineWidth: 1.5)
+            }
+        }
+    }
+}
+
+private struct StreaksHabitsCard: View {
+    @EnvironmentObject private var store: AttendanceStore
+    let year: Int
+
+    var body: some View {
+        let streaks = computeStreaks()
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Streaks & habits")
+                .sectionLabel()
+            VStack(spacing: 0) {
+                HabitRow(label: "Longest office streak", value: streaks.longestOffice, color: .officeBlue)
+                HabitRow(label: "Longest WFH streak", value: streaks.longestWfh, color: .wfhPurple)
+                HabitRow(label: "Office days in a row now", value: streaks.currentOffice, color: .officeBlue.opacity(0.55), muted: true)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .cardStyle()
+        }
+    }
+
+    private func computeStreaks() -> (longestOffice: Int, longestWfh: Int, currentOffice: Int) {
+        let dates = DateHelpers.dates(from: "\(year)-01-01", through: min(DateHelpers.todayISO(), "\(year)-12-31"))
+            .filter { DateHelpers.isMetricsWorkingDay($0, excludingNWD: []) }
+        var longestOffice = 0
+        var longestWfh = 0
+        var officeRun = 0
+        var wfhRun = 0
+
+        for date in dates {
+            switch store.kind(for: date) {
+            case .office:
+                officeRun += 1
+                wfhRun = 0
+            case .wfh:
+                wfhRun += 1
+                officeRun = 0
+            default:
+                officeRun = 0
+                wfhRun = 0
+            }
+            longestOffice = max(longestOffice, officeRun)
+            longestWfh = max(longestWfh, wfhRun)
+        }
+
+        var currentOffice = 0
+        for date in dates.reversed() {
+            if store.kind(for: date) == .office {
+                currentOffice += 1
+            } else {
+                break
+            }
+        }
+
+        return (longestOffice, longestWfh, currentOffice)
+    }
+}
+
+private struct HabitRow: View {
+    let label: String
+    let value: Int
+    let color: Color
+    var muted = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(color)
+                .frame(width: 4, height: 26)
+            Text(label)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(muted ? Color.secondary : Color.white)
+            Spacer()
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("\(value)")
+                    .font(.system(size: 25, weight: .bold, design: .rounded))
+                    .foregroundStyle(muted ? Color.secondary : Color.white)
+                Text("days")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 7)
+    }
+}
+
+private struct AnnualLeaveGaugeCard: View {
+    let leave: LeaveBreakdown
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Annual leave")
+                .sectionLabel()
+            VStack(spacing: 8) {
+                LeaveArc(progress: progress)
+                    .frame(width: 148, height: 82)
+                    .overlay(alignment: .bottom) {
+                        VStack(spacing: 2) {
+                            Text("\(leave.remaining)")
+                                .font(.system(size: 31, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                            Text("DAYS LEFT")
+                                .font(.system(size: 9, weight: .heavy))
+                                .tracking(1.4)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                Divider().overlay(Color.white.opacity(0.08))
+                HStack {
+                    GaugeStat(label: "Taken", value: leave.taken, color: .leaveOrange)
+                    GaugeStat(label: "Booked", value: leave.booked, color: .leaveBooked)
+                    GaugeStat(label: "Allowance", value: leave.allowance, color: .nwdGray)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .cardStyle()
+            Text("Calendar year · \(leave.allowance) day allowance")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+        }
+    }
+
+    private var progress: Double {
+        guard leave.allowance > 0 else { return 0 }
+        return min(max(Double(leave.taken + leave.booked) / Double(leave.allowance), 0), 1)
+    }
+}
+
+private struct LeaveArc: View {
+    let progress: Double
+
+    var body: some View {
+        ZStack {
+            ArcShape()
+                .stroke(Color.leaveBooked.opacity(0.75), style: StrokeStyle(lineWidth: 18, lineCap: .round))
+            ArcShape(end: progress)
+                .stroke(Color.leaveOrange, style: StrokeStyle(lineWidth: 18, lineCap: .round))
+        }
+    }
+}
+
+private struct ArcShape: Shape {
+    var end: Double = 1
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let center = CGPoint(x: rect.midX, y: rect.maxY)
+        let radius = min(rect.width / 2 - 18, rect.height - 18)
+        path.addArc(
+            center: center,
+            radius: radius,
+            startAngle: .degrees(200),
+            endAngle: .degrees(200 + 140 * end),
+            clockwise: false
+        )
+        return path
+    }
+}
+
+private struct GaugeStat: View {
+    let label: String
+    let value: Int
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text("\(value)")
+                .font(.title3.bold())
+                .foregroundStyle(.white)
+            Label(label.uppercased(), systemImage: "circle.fill")
+                .font(.system(size: 9, weight: .heavy))
+                .foregroundStyle(color)
+                .labelStyle(.titleAndIcon)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct WellbeingCard: View {
+    let metrics: Metrics
+    let year: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Wellbeing")
+                .sectionLabel()
+            VStack(spacing: 0) {
+                WellbeingRow(label: "Days sick YTD", value: metrics.sickness, color: .sickRed)
+                Divider().overlay(Color.white.opacity(0.08))
+                WellbeingRow(label: "Non-working days", value: metrics.nwd, color: .nwdGray)
+                Divider().overlay(Color.white.opacity(0.08))
+                WellbeingRow(label: "Bank holidays", value: DateHelpers.bankHolidayCount(year: year, through: min(DateHelpers.todayISO(), "\(year)-12-31")), color: .holidayGreen)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .cardStyle()
+        }
+    }
+}
+
+private struct WellbeingRow: View {
+    let label: String
+    let value: Int
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(label)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+            Spacer()
+            Text("\(value)")
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.white)
+        }
+        .padding(.vertical, 9)
+    }
+}
+
+private struct InsightHeroCard: View {
+    let title: String
+    let subtitle: String
+    let percent: Double
+    let target: Double
+    let metrics: Metrics
+
+    var body: some View {
+        let onTrack = percent >= target
+        VStack(spacing: 14) {
+            VStack(spacing: 3) {
+                Text(title)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text("\(percent, specifier: "%.0f")%")
+                    .font(.system(size: 64, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Text("In office")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(subtitle)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("\(onTrack ? "On track" : "Below target") · target \(target, specifier: "%.0f")%")
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(onTrack ? Color.holidayGreen : Color.sickRed)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.cardBackgroundElevated, in: Capsule())
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.cardBackgroundElevated)
+                    .frame(height: 8)
+                Capsule()
+                    .fill(onTrack ? Color.holidayGreen : Color.sickRed)
+                    .frame(width: max(4, min(percent, 100) / 100 * 300), height: 8)
+                Rectangle()
+                    .fill(Color.white.opacity(0.35))
+                    .frame(width: 2, height: 18)
+                    .offset(x: max(0, min(target, 100) / 100 * 300))
+            }
+            .frame(maxWidth: 300, alignment: .leading)
+
+            HStack {
+                HeroStat(value: metrics.office, label: "Office", color: .officeBlue)
+                HeroStat(value: metrics.wfh, label: "WFH", color: .wfhPurple)
+                HeroStat(value: metrics.tracked, label: "Tracked", color: .holidayGreen)
+            }
+        }
+        .padding(22)
+        .cardStyle()
+    }
+}
+
+private struct HeroStat: View {
+    let value: Int
+    let label: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text("\(value)")
+                .font(.headline.bold())
+                .foregroundStyle(color)
+            Text(label.uppercased())
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct BreakdownCard: View {
+    let metrics: Metrics
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Breakdown")
+                .font(.headline)
+            StatRow(label: "Office", value: "\(metrics.office) days", color: .officeBlue)
+            StatRow(label: "WFH", value: "\(metrics.wfh) days", color: .wfhPurple)
+            StatRow(label: "Annual leave", value: "\(metrics.leave) days", color: .leaveOrange)
+            StatRow(label: "Sickness", value: "\(metrics.sickness) days", color: .sickRed)
+            StatRow(label: "Non-working", value: "\(metrics.nwd) days", color: .nwdGray)
+            StatRow(label: "Unassigned", value: "\(metrics.unassigned) days", color: .secondary)
+            Divider()
+                .overlay(Color.white.opacity(0.08))
+            HStack {
+                Text("Working days")
+                    .foregroundStyle(.white)
+                Spacer()
+                Text("\(metrics.workingDays)")
+                    .fontWeight(.bold)
+            }
+        }
+        .padding(18)
+        .cardStyle()
+    }
+}
+
+private struct StatRow: View {
+    let label: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(color)
+                .frame(width: 10, height: 10)
+            Text(label)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(value)
+                .fontWeight(.semibold)
+                .foregroundStyle(.white)
+        }
+        .font(.body)
+    }
+}
+
+private struct MonthlyHeatmapCard: View {
+    let year: Int
+    let currentMonth: Int
+    let target: Double
+    let monthly: [Metrics]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Monthly office %")
+                .font(.headline)
+            HStack(alignment: .bottom, spacing: 5) {
+                ForEach(Array(monthly.enumerated()), id: \.offset) { index, metrics in
+                    let percent = metrics.officeShare ?? 0
+                    let isFuture = year == DateHelpers.currentYear && index + 1 > currentMonth
+                    VStack(spacing: 5) {
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(percent >= target ? Color.holidayGreen : (percent > 0 ? Color.sickRed : Color.cardBackgroundElevated))
+                            .frame(height: max(4, CGFloat(percent) * 0.6))
+                            .opacity(isFuture ? 0.35 : 1)
+                        Text(DateHelpers.monthShortNames[index])
+                            .font(.caption2.weight(index + 1 == currentMonth ? .bold : .regular))
+                            .foregroundStyle(index + 1 == currentMonth ? Color.holidayGreen : .secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .frame(height: 88, alignment: .bottom)
+        }
+        .padding(18)
+        .cardStyle()
+    }
+}
+
+private struct KPIDashboardCard: View {
+    let title: String
+    let subtitle: String
+    let ringValue: Double?
+    let centerText: String
+    let centerCaption: String
+    let rows: [KPIStat]
+    let footer: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.headline.weight(.heavy))
+                    .tracking(1.2)
+                Spacer()
+                Text(subtitle)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+            }
+
+            HStack(spacing: 18) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.slate.opacity(0.5), lineWidth: 14)
+                    Circle()
+                        .trim(from: 0, to: ringValue.map { min(max($0 / 100, 0), 1) } ?? 0)
+                        .stroke(
+                            AngularGradient(colors: [.cyan, .green, .cyan], center: .center),
+                            style: StrokeStyle(lineWidth: 14, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                    VStack(spacing: 3) {
+                        Text(centerText)
+                            .font(.system(.title2, design: .rounded, weight: .heavy))
+                        Text(centerCaption.uppercased())
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(20)
+                }
+                .frame(width: 154, height: 154)
+
+                VStack(spacing: 10) {
+                    ForEach(rows) { row in
+                        HStack(spacing: 10) {
+                            Circle()
+                                .fill(row.color)
+                                .frame(width: 10, height: 10)
+                                .shadow(color: row.color.opacity(0.7), radius: 8)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(row.value)
+                                    .font(.title3.bold())
+                                Text(row.label.uppercased())
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if let percent = row.percent {
+                                Text(percent)
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+            .padding(12)
+            .background(Color.cardBackgroundElevated, in: RoundedRectangle(cornerRadius: 14))
+                    }
+                }
+            }
+
+            Divider()
+                .overlay(Color.white.opacity(0.08))
+
+            Text(footer)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .padding(18)
+        .cardStyle()
+    }
+}
+
+private struct LeaveDashboardCard: View {
+    let year: Int
+    let allowance: Int
+    let booked: Int
+    let takenYTD: Int
+    let bookedAhead: Int
+    let remaining: Int
+    let sickness: Int
+    let nwd: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("ANNUAL LEAVE")
+                    .font(.headline.weight(.heavy))
+                    .tracking(1.2)
+                Spacer()
+                Text("\(year) · \(allowance) day allowance · \(booked) booked")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 18) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.slate.opacity(0.6), lineWidth: 15)
+                    Circle()
+                        .trim(from: 0, to: allowance > 0 ? min(Double(booked) / Double(allowance), 1) : 0)
+                        .stroke(Color.pink, style: StrokeStyle(lineWidth: 15, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    VStack(spacing: 3) {
+                        Text("\(remaining)")
+                            .font(.system(.title, design: .rounded, weight: .heavy))
+                            .foregroundStyle(remaining == 0 && booked > allowance ? .red : .pink)
+                        Text("DAYS LEFT")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(width: 154, height: 154)
+
+                VStack(spacing: 10) {
+                    KPICompactRow(title: "Taken (YTD)", value: "\(takenYTD)", tag: "Annual leave", color: .pink)
+                    KPICompactRow(title: "Booked ahead", value: "\(bookedAhead)", tag: "Still to take", color: .purple)
+                    KPICompactRow(title: "Unbooked pool", value: "\(remaining)", tag: "In allowance", color: .slate)
+                    KPICompactRow(title: "Days sick", value: "\(sickness)", tag: "YTD", color: .orange)
+                    KPICompactRow(title: "NWD", value: "\(nwd)", tag: "YTD", color: .teal)
+                }
+            }
+        }
+        .padding(18)
+        .cardStyle()
+    }
+}
+
+private struct KPICompactRow: View {
+    let title: String
+    let value: String
+    let tag: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(color)
+                .frame(width: 10, height: 10)
+                .shadow(color: color.opacity(0.7), radius: 8)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(value)
+                        .font(.title3.bold())
+                    Text(title.uppercased())
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                Text(tag.uppercased())
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.cardBackgroundElevated, in: RoundedRectangle(cornerRadius: 7))
+            }
+            Spacer()
+        }
+        .padding(12)
+        .background(Color.cardBackgroundElevated, in: RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+private struct KPIStat: Identifiable {
+    let id = UUID()
+    let label: String
+    let value: String
+    let percent: String?
+    let color: Color
 }
 
 private struct SettingsScreen: View {
     @EnvironmentObject private var store: AttendanceStore
+    @State private var name = ""
     @State private var targetPct = 40.0
     @State private var leaveAllowance = 25.0
 
     var body: some View {
-        Form {
-            Section("Attendance target") {
-                VStack(alignment: .leading, spacing: 10) {
+        ScrollView {
+            VStack(spacing: 18) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Profile")
+                        .font(.headline)
+
+                    HStack(spacing: 14) {
+                        Text(initials)
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 56, height: 56)
+                            .background(
+                                LinearGradient(colors: [.holidayGreen, .wfhPurple], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                in: Circle()
+                            )
+                        VStack(alignment: .leading, spacing: 8) {
+                            TextField("Your name", text: $name)
+                                .font(.body.weight(.semibold))
+                                .textInputAutocapitalization(.words)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(Color.cardBackgroundElevated, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            Text(store.user?.email ?? "")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .padding(18)
+                .cardStyle()
+
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("KPI settings")
+                        .font(.headline)
+
                     HStack {
                         Text("Office target")
+                            .font(.title3.weight(.semibold))
                         Spacer()
                         Text("\(targetPct, specifier: "%.1f")%")
+                            .font(.title3.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
                     Slider(value: $targetPct, in: 0...100, step: 0.5)
+                        .tint(.cyan)
                 }
-            }
+                .padding(18)
+                .cardStyle()
 
-            Section("Annual leave") {
-                Stepper(value: $leaveAllowance, in: 0...60, step: 1) {
+                VStack(alignment: .leading, spacing: 16) {
                     HStack {
-                        Text("\(DateHelpers.currentYear) allowance")
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Annual leave")
+                                .font(.headline)
+                            Text("\(DateHelpers.currentYear) allowance")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
                         Spacer()
                         Text("\(Int(leaveAllowance)) days")
-                            .foregroundStyle(.secondary)
+                            .font(.title3.weight(.bold))
                     }
-                }
-            }
 
-            Section {
+                    Stepper(value: $leaveAllowance, in: 0...60, step: 1) {
+                        Text("Annual allowance")
+                            .font(.body.weight(.medium))
+                    }
+                    .tint(.cyan)
+                }
+                .padding(18)
+                .cardStyle()
+
                 Button {
                     Task {
                         await store.updateSettings(
+                            name: name,
                             targetPct: targetPct,
                             leaveAllowance: Int(leaveAllowance),
                             year: DateHelpers.currentYear
@@ -485,21 +2375,44 @@ private struct SettingsScreen: View {
                     }
                 } label: {
                     Label("Save settings", systemImage: "checkmark.circle.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
                 }
-            }
+                .buttonStyle(.borderedProminent)
+                .tint(.cyan)
 
-            Section("Account") {
-                Text(store.user?.email ?? "")
-                Button("Sign out", role: .destructive) {
-                    store.signOut()
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Account")
+                        .font(.headline)
+                    Text(store.user?.email ?? "")
+                        .font(.body)
+                        .textSelection(.enabled)
+                    Divider()
+                        .overlay(Color.white.opacity(0.08))
+                    Button("Sign out", role: .destructive) {
+                        store.signOut()
+                    }
+                    .font(.body.weight(.semibold))
                 }
+                .padding(18)
+                .cardStyle()
             }
+            .padding(16)
         }
+        .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle("Settings")
         .onAppear {
+            name = store.profile.name
             targetPct = store.profile.settings.targetPct
             leaveAllowance = Double(store.profile.allowance(for: DateHelpers.currentYear))
         }
+    }
+
+    private var initials: String {
+        let parts = name.split(separator: " ")
+        let raw = parts.prefix(2).compactMap(\.first).map(String.init).joined()
+        return raw.isEmpty ? "OA" : raw.uppercased()
     }
 }
 
@@ -511,7 +2424,7 @@ private struct RingMetric: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.12), lineWidth: 12)
+                .stroke(Color.slate.opacity(0.20), lineWidth: 12)
             Circle()
                 .trim(from: 0, to: value.map { min(max($0 / 100, 0), 1) } ?? 0)
                 .stroke(
@@ -602,6 +2515,28 @@ private final class AttendanceStore: ObservableObject {
         await authenticate(path: "/api/auth/register", email: email, password: password)
     }
 
+    func signInWithGoogle(idToken: String) async {
+        await authenticateSocial(path: "/api/auth/google", idToken: idToken)
+    }
+
+    func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) async {
+        switch result {
+        case .success(let authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let data = credential.identityToken,
+                  let idToken = String(data: data, encoding: .utf8) else {
+                presentError("Apple did not return a sign-in credential. Try again.")
+                return
+            }
+            await authenticateSocial(path: "/api/auth/apple", idToken: idToken)
+        case .failure(let error):
+            if (error as? ASAuthorizationError)?.code == .canceled {
+                return
+            }
+            presentError(error.localizedDescription)
+        }
+    }
+
     func loadState() async {
         guard isSignedIn else { return }
         isSyncing = true
@@ -630,8 +2565,29 @@ private final class AttendanceStore: ObservableObject {
         }
     }
 
-    func updateSettings(targetPct: Double, leaveAllowance: Int, year: Int) async {
-        state.updateSettings(targetPct: targetPct, leaveAllowance: leaveAllowance, year: year)
+    func set(dates: Set<String>, to kind: DayKind) async {
+        guard !dates.isEmpty else { return }
+        var failures: [String] = []
+        var changed = false
+        for date in dates.sorted() {
+            do {
+                try state.set(date: date, to: kind)
+                changed = true
+            } catch {
+                failures.append(error.localizedDescription)
+            }
+        }
+        if changed {
+            persistState()
+            await saveState()
+        }
+        if let first = failures.first {
+            presentError(first)
+        }
+    }
+
+    func updateSettings(name: String, targetPct: Double, leaveAllowance: Int, year: Int) async {
+        state.updateSettings(name: name, targetPct: targetPct, leaveAllowance: leaveAllowance, year: year)
         persistState()
         await saveState()
     }
@@ -656,8 +2612,16 @@ private final class AttendanceStore: ObservableObject {
         state.canApply(kind, to: date)
     }
 
+    func canApply(_ kind: DayKind, to dates: Set<String>) -> Bool {
+        !dates.isEmpty && dates.allSatisfy { state.canApply(kind, to: $0) }
+    }
+
     func metrics(for month: Month) -> Metrics {
         state.metrics(from: month.startISO, through: month.endISO)
+    }
+
+    func metrics(from start: String, through end: String) -> Metrics {
+        state.metrics(from: start, through: end)
     }
 
     func yearMetrics(year: Int) -> Metrics {
@@ -666,22 +2630,46 @@ private final class AttendanceStore: ObservableObject {
         return state.metrics(from: start, through: end)
     }
 
+    func fullYearMetrics(year: Int) -> Metrics {
+        state.metrics(from: "\(year)-01-01", through: "\(year)-12-31")
+    }
+
+    func leaveBreakdown(year: Int) -> LeaveBreakdown {
+        state.leaveBreakdown(year: year, today: DateHelpers.todayISO())
+    }
+
     private func authenticate(path: String, email: String, password: String) async {
         isBusy = true
         defer { isBusy = false }
         do {
             let body = AuthRequest(email: email, password: password)
             let response: AuthResponse = try await client.request(path: path, method: "POST", body: body)
-            client.token = response.token
-            user = response.user
-            UserDefaults.standard.set(response.token, forKey: tokenKey)
-            if let userData = try? JSONEncoder().encode(response.user) {
-                UserDefaults.standard.set(userData, forKey: userKey)
-            }
-            await loadState()
+            await finishAuthentication(response)
         } catch {
             presentError(error.localizedDescription)
         }
+    }
+
+    private func authenticateSocial(path: String, idToken: String) async {
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            let body = SocialAuthRequest(idToken: idToken)
+            let response: AuthResponse = try await client.request(path: path, method: "POST", body: body)
+            await finishAuthentication(response)
+        } catch {
+            presentError(error.localizedDescription)
+        }
+    }
+
+    private func finishAuthentication(_ response: AuthResponse) async {
+        client.token = response.token
+        user = response.user
+        UserDefaults.standard.set(response.token, forKey: tokenKey)
+        if let userData = try? JSONEncoder().encode(response.user) {
+            UserDefaults.standard.set(userData, forKey: userKey)
+        }
+        await loadState()
     }
 
     private func saveState() async {
@@ -758,6 +2746,10 @@ private struct AuthRequest: Encodable {
     let password: String
 }
 
+private struct SocialAuthRequest: Encodable {
+    let idToken: String
+}
+
 private struct AuthResponse: Decodable {
     let token: String
     let user: AuthUser
@@ -778,6 +2770,39 @@ private struct SaveStateRequest: Encodable {
 
 private struct SaveStateResponse: Decodable {
     let ok: Bool
+}
+
+private extension Bundle {
+    var googleIOSClientID: String {
+        String(object(forInfoDictionaryKey: "GOOGLE_IOS_CLIENT_ID") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var googleIOSCallbackScheme: String? {
+        let value = String(object(forInfoDictionaryKey: "GOOGLE_IOS_CALLBACK_SCHEME") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+}
+
+private extension String {
+    var googleCallbackScheme: String? {
+        let suffix = ".apps.googleusercontent.com"
+        guard hasSuffix(suffix) else { return nil }
+        return "com.googleusercontent.apps." + dropLast(suffix.count)
+    }
+}
+
+private extension URL {
+    var fragmentParameters: [String: String] {
+        guard let fragment, !fragment.isEmpty else { return [:] }
+        var components = URLComponents()
+        components.percentEncodedQuery = fragment
+        return Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item in
+            guard let value = item.value else { return nil }
+            return (item.name, value)
+        })
+    }
 }
 
 private struct AttendanceState: Codable {
@@ -813,17 +2838,25 @@ private struct AttendanceState: Codable {
     func canApply(_ kind: DayKind, to date: String) -> Bool {
         if kind == .unassigned { return true }
         if kind == .nwd { return !DateHelpers.isWeekend(date) && !DateHelpers.isBankHoliday(date) }
-        return DateHelpers.isAssignableWorkday(date, excludingNWD: activeProfile.nwdMarks)
+        return !DateHelpers.isWeekend(date) && !DateHelpers.isBankHoliday(date)
     }
 
-    mutating func updateSettings(targetPct: Double, leaveAllowance: Int, year: Int) {
+    mutating func updateSettings(name: String, targetPct: Double, leaveAllowance: Int, year: Int) {
         guard let index = profiles.firstIndex(where: { $0.id == activeProfileId }) else { return }
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedName.isEmpty {
+            profiles[index].name = trimmedName
+        }
         profiles[index].settings.targetPct = targetPct
         profiles[index].settings.leaveAllowances[String(year)] = leaveAllowance
     }
 
     func metrics(from start: String, through end: String) -> Metrics {
         activeProfile.metrics(from: start, through: end)
+    }
+
+    func leaveBreakdown(year: Int, today: String) -> LeaveBreakdown {
+        activeProfile.leaveBreakdown(year: year, today: today)
     }
 }
 
@@ -973,6 +3006,9 @@ private struct AttendanceProfile: Codable {
         var metrics = Metrics()
         for date in DateHelpers.dates(from: start, through: end) {
             let working = DateHelpers.isMetricsWorkingDay(date, excludingNWD: nwdMarks)
+            if working {
+                metrics.workingDays += 1
+            }
             switch kind(for: date) {
             case .office where working:
                 metrics.office += 1
@@ -994,6 +3030,25 @@ private struct AttendanceProfile: Codable {
         }
         return metrics
     }
+
+    func leaveBreakdown(year: Int, today: String) -> LeaveBreakdown {
+        var taken = 0
+        var booked = 0
+        for date in leaveMarks where date.hasPrefix("\(year)-") {
+            if date <= today {
+                taken += 1
+            } else {
+                booked += 1
+            }
+        }
+        let allowance = allowance(for: year)
+        return LeaveBreakdown(
+            taken: taken,
+            booked: booked,
+            allowance: allowance,
+            remaining: allowance - taken - booked
+        )
+    }
 }
 
 private struct ProfileSettings: Codable {
@@ -1006,6 +3061,7 @@ private struct ProfileSettings: Codable {
 }
 
 private struct Metrics {
+    var workingDays = 0
     var office = 0
     var wfh = 0
     var leave = 0
@@ -1018,6 +3074,31 @@ private struct Metrics {
         guard tracked > 0 else { return nil }
         return Double(office) / Double(tracked) * 100
     }
+
+    func percentLabel(for count: Int) -> String? {
+        guard tracked > 0 else { return nil }
+        return String(format: "%.1f%%", Double(count) / Double(tracked) * 100)
+    }
+
+    func statusLabel(target: Double) -> String {
+        guard let officeShare else { return "Status: N/A" }
+        let diff = officeShare - target
+        if abs(diff) <= 0.5 { return "On track" }
+        return diff > 0 ? "Ahead" : "Behind"
+    }
+
+    func officeDaysNeeded(for target: Double) -> Int {
+        guard target > 0, target < 100 else { return 0 }
+        let required = (target / 100) * Double(tracked) - Double(office)
+        return max(0, Int(ceil(required)))
+    }
+}
+
+private struct LeaveBreakdown {
+    let taken: Int
+    let booked: Int
+    let allowance: Int
+    let remaining: Int
 }
 
 private enum DayKind: String, Codable, Identifiable {
@@ -1051,6 +3132,32 @@ private enum DayKind: String, Codable, Identifiable {
         self == .unassigned ? "Clear" : title
     }
 
+    var tileLabel: String {
+        switch self {
+        case .office: "OFFICE"
+        case .wfh: "WFH"
+        case .leave: "LEAVE"
+        case .sickness: "SICK"
+        case .nwd: "NWD"
+        case .bankHoliday: "BH"
+        case .unassigned: ""
+        case .weekend: ""
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .office: "Office"
+        case .wfh: "WFH"
+        case .leave: "Annual leave"
+        case .sickness: "Sickness"
+        case .nwd: "Non-working"
+        case .unassigned: "Clear"
+        case .weekend: "Weekend"
+        case .bankHoliday: "Bank holiday"
+        }
+    }
+
     var icon: String {
         switch self {
         case .office: "building.2.fill"
@@ -1064,16 +3171,41 @@ private enum DayKind: String, Codable, Identifiable {
         }
     }
 
+    var sheetIcon: String {
+        switch self {
+        case .office: "building.columns"
+        case .wfh: "house"
+        case .leave: "tree"
+        case .sickness: "thermometer.medium"
+        case .nwd: "minus"
+        case .unassigned: "xmark"
+        case .weekend: "calendar.badge.clock"
+        case .bankHoliday: "star"
+        }
+    }
+
     var color: Color {
         switch self {
-        case .office: .green
-        case .wfh: .teal
-        case .leave: .orange
-        case .sickness: .pink
-        case .nwd: .purple
+        case .office: .officeBlue
+        case .wfh: .wfhPurple
+        case .leave: .leaveOrange
+        case .sickness: .sickRed
+        case .nwd: .nwdGray
         case .unassigned: .blue
         case .weekend: .gray
-        case .bankHoliday: .red
+        case .bankHoliday: .holidayGreen
+        }
+    }
+
+    var insightColor: Color {
+        switch self {
+        case .office: .officeBlue
+        case .wfh: .wfhPurple
+        case .leave: .leaveOrange
+        case .sickness: .sickRed
+        case .nwd: .nwdGray
+        case .bankHoliday: .holidayGreen
+        case .unassigned, .weekend: Color.cardBackgroundElevated
         }
     }
 }
@@ -1110,6 +3242,12 @@ private struct Month {
             }
     }
 
+    var assignableDates: [String] {
+        gridDays.compactMap(\.iso).filter {
+            !DateHelpers.isWeekend($0) && !DateHelpers.isBankHoliday($0)
+        }
+    }
+
     func shifted(by offset: Int) -> Month {
         var y = year
         var m = month + offset
@@ -1128,6 +3266,14 @@ private struct Month {
         let day = min(Int(current.suffix(2)) ?? 1, DateHelpers.daysInMonth(year: year, month: month))
         return DateHelpers.iso(year: year, month: month, day: day)
     }
+
+    func defaultSelection() -> String {
+        let today = DateHelpers.todayParts()
+        if today.year == year && today.month == month && !DateHelpers.isWeekend(DateHelpers.todayISO()) {
+            return DateHelpers.todayISO()
+        }
+        return gridDays.compactMap(\.iso).first { !DateHelpers.isWeekend($0) } ?? startISO
+    }
 }
 
 private struct CalendarDay: Identifiable {
@@ -1141,8 +3287,10 @@ private struct CalendarDay: Identifiable {
 }
 
 private enum DateHelpers {
-    static let weekdayLabels = ["M", "T", "W", "T", "F", "S", "S"]
+    static let weekdayLabels = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+    static let weekdayLetters = ["M", "T", "W", "T", "F", "S", "S"]
     static let monthNames = Calendar.current.monthSymbols
+    static let monthShortNames = Calendar.current.shortMonthSymbols
     static let london = TimeZone(identifier: "Europe/London") ?? .current
     static let bankHolidays: Set<String> = [
         "2025-01-01", "2025-04-18", "2025-04-21", "2025-05-05", "2025-05-26", "2025-08-25", "2025-12-25", "2025-12-26",
@@ -1209,8 +3357,33 @@ private enum DateHelpers {
         return weekday == 1 || weekday == 7
     }
 
+    static func weekdayNumber(_ iso: String) -> Int {
+        guard let date = date(from: iso) else { return 0 }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = london
+        let weekday = calendar.component(.weekday, from: date)
+        return ((weekday + 5) % 7) + 1
+    }
+
+    static func weekdayShortName(_ weekday: Int) -> String {
+        ["MON", "TUE", "WED", "THU", "FRI"][max(0, min(weekday - 1, 4))]
+    }
+
+    static func isoWeekNumber(_ iso: String) -> Int {
+        guard let date = date(from: iso) else { return 0 }
+        var calendar = Calendar(identifier: .iso8601)
+        calendar.timeZone = london
+        return calendar.component(.weekOfYear, from: date)
+    }
+
     static func isBankHoliday(_ iso: String) -> Bool {
         bankHolidays.contains(iso) && !isWeekend(iso)
+    }
+
+    static func bankHolidayCount(year: Int, through end: String) -> Int {
+        bankHolidays.filter { holiday in
+            holiday.hasPrefix("\(year)-") && holiday <= end && !isWeekend(holiday)
+        }.count
     }
 
     static func isAssignableWorkday(_ iso: String, excludingNWD nwd: [String]) -> Bool {
@@ -1218,7 +3391,7 @@ private enum DateHelpers {
     }
 
     static func isMetricsWorkingDay(_ iso: String, excludingNWD nwd: [String]) -> Bool {
-        isAssignableWorkday(iso, excludingNWD: nwd)
+        !isWeekend(iso) && !isBankHoliday(iso)
     }
 
     static func dates(from start: String, through end: String) -> [String] {
@@ -1238,33 +3411,88 @@ private enum DateHelpers {
 // MARK: - Styling
 
 private extension View {
+    func sectionLabel() -> some View {
+        self
+            .font(.caption.weight(.heavy))
+            .tracking(1.7)
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+    }
+
     func cardStyle() -> some View {
         self
-            .background(Color.cardBackground, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .background(Color.cardBackground, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
             }
-            .shadow(color: Color.black.opacity(0.08), radius: 18, y: 10)
+            .shadow(color: Color.black.opacity(0.28), radius: 18, y: 8)
+    }
+
+    func glassPanel(cornerRadius: CGFloat = 26) -> some View {
+        self
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(Color.white.opacity(0.75), lineWidth: 0.8)
+            }
+            .shadow(color: Color.black.opacity(0.08), radius: 24, y: 12)
+    }
+
+    func heroPanel() -> some View {
+        self
+            .background(
+                LinearGradient(
+                    colors: [Color(hex: "242426"), Color(hex: "18181A")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 30, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
+            }
+            .shadow(color: Color.black.opacity(0.34), radius: 24, y: 12)
     }
 
     func inputStyle() -> some View {
         self
             .padding(.horizontal, 14)
             .padding(.vertical, 13)
-            .background(Color.white.opacity(0.95), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .foregroundStyle(Color.black)
+            .background(Color.cardBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .foregroundStyle(Color.white)
     }
 }
 
 private extension Color {
-    static let appBackground = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark ? UIColor(hex: "07111f") : UIColor(hex: "f4f7fb")
-    })
+    static let appBackground = Color(hex: "000000")
 
-    static let cardBackground = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark ? UIColor(hex: "101927") : UIColor.white
-    })
+    static let cardBackground = Color(hex: "1C1C1E")
+
+    static let systemGroupedFill = Color(hex: "2C2C2E")
+
+    static let cardBackgroundElevated = Color(hex: "2C2C2E")
+
+    static let slate = Color(hex: "8090a8")
+
+    static let gold = Color(hex: "d6c51f")
+
+    static let officeBlue = Color(hex: "0A84FF")
+
+    static let wfhPurple = Color(hex: "BF5AF2")
+
+    static let leaveOrange = Color(hex: "FF9F0A")
+
+    static let leaveBooked = Color(hex: "9C6A28")
+
+    static let sickRed = Color(hex: "FF453A")
+
+    static let nwdGray = Color(hex: "8E8E93")
+
+    static let holidayGreen = Color(hex: "30D158")
 
     init(hex: String) {
         self.init(uiColor: UIColor(hex: hex))

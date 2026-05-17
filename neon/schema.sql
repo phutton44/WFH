@@ -8,16 +8,19 @@ create table if not exists public.users (
   email text not null unique,
   password_hash text,
   google_sub text unique,
+  apple_sub text unique,
   auth_provider text not null default 'password',
   created_at timestamptz not null default now()
 );
 
 alter table public.users alter column password_hash drop not null;
 alter table public.users add column if not exists google_sub text;
+alter table public.users add column if not exists apple_sub text;
 alter table public.users add column if not exists auth_provider text not null default 'password';
 
 create index if not exists users_email_lower_idx on public.users (lower(email));
 create unique index if not exists users_google_sub_idx on public.users (google_sub) where google_sub is not null;
+create unique index if not exists users_apple_sub_idx on public.users (apple_sub) where apple_sub is not null;
 
 create table if not exists public.app_state (
   user_id uuid primary key references public.users (id) on delete cascade,

@@ -6,9 +6,15 @@ const { getPool, signToken, normalizeEmail, ensureAppSchema } = require("../_sha
 let googleKeys;
 let googleKeysExpiresAt = 0;
 
-function getGoogleClientId() {
-  return String(process.env.GOOGLE_CLIENT_ID || process.env.WFH_GOOGLE_CLIENT_ID || "")
-    .trim();
+function getGoogleClientIds() {
+  return [
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.WFH_GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_IOS_CLIENT_ID,
+    process.env.WFH_GOOGLE_IOS_CLIENT_ID,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
 }
 
 function decodeBase64UrlJson(part) {
@@ -37,8 +43,8 @@ async function getGoogleKey(kid) {
 }
 
 async function verifyGoogleIdToken(idToken) {
-  const clientId = getGoogleClientId();
-  if (!clientId) {
+  const clientIds = getGoogleClientIds();
+  if (clientIds.length === 0) {
     const err = new Error("Google sign-in is not configured.");
     err.status = 503;
     throw err;
@@ -79,7 +85,7 @@ async function verifyGoogleIdToken(idToken) {
     err.status = 401;
     throw err;
   }
-  if (payload.aud !== clientId) {
+  if (!clientIds.includes(payload.aud)) {
     const err = new Error("Invalid Google audience.");
     err.status = 401;
     throw err;
