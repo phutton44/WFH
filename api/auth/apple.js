@@ -1,7 +1,7 @@
 "use strict";
 
 const crypto = require("crypto");
-const { getPool, signToken, normalizeEmail, ensureAppSchema } = require("../_shared.js");
+const { getPool, signToken, methodNotAllowed, parseJsonBody, normalizeEmail, ensureAppSchema } = require("../_shared.js");
 
 let appleKeys;
 let appleKeysExpiresAt = 0;
@@ -125,17 +125,14 @@ async function verifyAppleIdToken(idToken) {
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
-    return res.status(405).json({ error: "Method not allowed" });
+    return methodNotAllowed(res, "POST");
   }
 
-  let body = req.body;
-  if (typeof body === "string") {
-    try {
-      body = JSON.parse(body || "{}");
-    } catch {
-      return res.status(400).json({ error: "Invalid JSON" });
-    }
+  let body;
+  try {
+    body = parseJsonBody(req);
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
   }
 
   try {

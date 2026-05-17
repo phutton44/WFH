@@ -1,6 +1,6 @@
 "use strict";
 
-const { getPool, requireAuth, ensureAppSchema } = require("./_shared.js");
+const { getPool, requireAuth, methodNotAllowed, parseJsonBody, ensureAppSchema } = require("./_shared.js");
 
 module.exports = async (req, res) => {
   const auth = requireAuth(req);
@@ -33,13 +33,11 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === "PUT") {
-    let body = req.body;
-    if (typeof body === "string") {
-      try {
-        body = JSON.parse(body || "{}");
-      } catch {
-        return res.status(400).json({ error: "Invalid JSON" });
-      }
+    let body;
+    try {
+      body = parseJsonBody(req);
+    } catch (err) {
+      return res.status(err.status || 400).json({ error: err.message });
     }
     const payload = body?.payload;
     if (payload === undefined || payload === null) {
@@ -64,6 +62,5 @@ module.exports = async (req, res) => {
     }
   }
 
-  res.setHeader("Allow", "GET, PUT");
-  return res.status(405).json({ error: "Method not allowed" });
+  return methodNotAllowed(res, "GET, PUT");
 };

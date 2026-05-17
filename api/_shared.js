@@ -111,6 +111,28 @@ function requireAuth(req) {
   }
 }
 
+function methodNotAllowed(res, allow) {
+  res.setHeader("Allow", allow);
+  return res.status(405).json({ error: "Method not allowed" });
+}
+
+function parseJsonBody(req) {
+  const body = req.body;
+  if (body === undefined || body === null || body === "") {
+    return {};
+  }
+  if (typeof body !== "string") {
+    return body;
+  }
+  try {
+    return JSON.parse(body || "{}");
+  } catch {
+    const err = new Error("Invalid JSON");
+    err.status = 400;
+    throw err;
+  }
+}
+
 function normalizeEmail(email) {
   return String(email || "")
     .trim()
@@ -198,4 +220,13 @@ function getRequestOrigin(req) {
   return `${proto}://${host}`.replace(/\/$/, "");
 }
 
-module.exports = { getPool, signToken, requireAuth, normalizeEmail, ensureAppSchema, getRequestOrigin };
+module.exports = {
+  getPool,
+  signToken,
+  requireAuth,
+  methodNotAllowed,
+  parseJsonBody,
+  normalizeEmail,
+  ensureAppSchema,
+  getRequestOrigin,
+};

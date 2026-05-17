@@ -526,281 +526,6 @@ private struct CalendarScreen: View {
     }
 }
 
-private struct HeaderCard: View {
-    @EnvironmentObject private var store: AttendanceStore
-    let month: Month
-
-    var body: some View {
-        let year = month.year
-        let ytd = store.yearMetrics(year: year)
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(store.profile.name)
-                        .font(.system(.title, design: .rounded, weight: .bold))
-                        .foregroundStyle(.white)
-                    Text("\(month.title) · \(store.user?.email ?? "")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer()
-                Button("Sign out") {
-                    store.signOut()
-                }
-                .font(.caption.weight(.semibold))
-                .buttonStyle(.plain)
-                .padding(.horizontal, 13)
-                .padding(.vertical, 9)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay {
-                    Capsule()
-                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-                }
-            }
-
-            HStack(spacing: 16) {
-                RingMetric(
-                    value: ytd.officeShare,
-                    title: "YTD office",
-                    subtitle: "\(ytd.office) office · \(ytd.wfh) WFH"
-                )
-                VStack(alignment: .leading, spacing: 10) {
-                    Label("\(ytd.leave) leave booked", systemImage: "sun.max.fill")
-                        .foregroundStyle(Color.orange)
-                    Label("\(ytd.sickness) sickness days", systemImage: "cross.case.fill")
-                        .foregroundStyle(Color.pink)
-                    Label("\(store.profile.settings.targetPct.formatted(.number.precision(.fractionLength(0...1))))% target", systemImage: "target")
-                        .foregroundStyle(Color.teal)
-                }
-                .font(.subheadline.weight(.medium))
-            }
-        }
-        .padding(20)
-        .heroPanel()
-    }
-}
-
-private struct MonthStatsStrip: View {
-    let metrics: Metrics
-    let target: Double
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                MonthChip(title: "Office", value: "\(metrics.office)", color: .officeBlue)
-                MonthChip(title: "WFH", value: "\(metrics.wfh)", color: .wfhPurple)
-                MonthChip(title: "Leave", value: "\(metrics.leave)", color: .leaveOrange)
-                MonthChip(title: "Sick", value: "\(metrics.sickness)", color: .sickRed)
-                MonthChip(
-                    title: "In office",
-                    value: metrics.officeShare.map { String(format: "%.0f%%", $0) } ?? "0%",
-                    color: (metrics.officeShare ?? 0) >= target ? .holidayGreen : .sickRed
-                )
-            }
-            .padding(.horizontal, 16)
-        }
-        .padding(.horizontal, -16)
-    }
-}
-
-private struct MonthChip: View {
-    let title: String
-    let value: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-            Text(value)
-                .font(.footnote.weight(.bold))
-                .foregroundStyle(.white)
-            Text(title)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 7)
-        .background(Color.cardBackground, in: Capsule())
-    }
-}
-
-private struct SummaryGrid: View {
-    let metrics: Metrics
-
-    var body: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            StatTile(title: "Office", value: "\(metrics.office)", icon: "building.2.fill", color: .green)
-            StatTile(title: "WFH", value: "\(metrics.wfh)", icon: "house.fill", color: .teal)
-            StatTile(title: "Leave", value: "\(metrics.leave)", icon: "sun.max.fill", color: .orange)
-            StatTile(title: "Open days", value: "\(metrics.unassigned)", icon: "questionmark.circle.fill", color: .blue)
-        }
-    }
-}
-
-private struct MonthStatsDashboard: View {
-    let month: Month
-    let metrics: Metrics
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Dashboard")
-                    .font(.headline.weight(.heavy))
-                    .tracking(1.4)
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                Spacer()
-                Text(month.title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-            }
-
-            VStack(spacing: 0) {
-                MonthStatRow(label: "Total working days", value: metrics.workingDays)
-                MonthStatRow(label: "In office", value: metrics.office)
-                MonthStatRow(label: "WFH", value: metrics.wfh)
-                MonthStatRow(label: "Annual leave", value: metrics.leave)
-                MonthStatRow(label: "Sickness", value: metrics.sickness)
-                MonthStatRow(label: "NWD", value: metrics.nwd)
-                MonthStatRow(label: "Unassigned", value: metrics.unassigned, showsDivider: false)
-            }
-            .padding(16)
-            .background(Color.cardBackgroundElevated, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-        .padding(18)
-        .cardStyle()
-    }
-}
-
-private struct MonthStatRow: View {
-    let label: String
-    let value: Int
-    var showsDivider = true
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(label)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(String(value))
-                    .fontWeight(.bold)
-                    .foregroundStyle(.white)
-            }
-            .font(.subheadline)
-            .padding(.vertical, 7)
-
-            if showsDivider {
-                Divider()
-                    .overlay(Color.white.opacity(0.08))
-            }
-        }
-    }
-}
-
-private struct StatTile: View {
-    let title: String
-    let value: String
-    let icon: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(color)
-                .frame(width: 36, height: 36)
-                .background(color.opacity(0.13), in: RoundedRectangle(cornerRadius: 12))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(value)
-                    .font(.title2.bold())
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding(14)
-        .cardStyle()
-    }
-}
-
-private struct MonthSelectorCard: View {
-    @Binding var month: Month
-    @Binding var selectedDates: Set<String>
-    var showsSelectionControls = true
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("Jump to month", systemImage: "calendar.badge.clock")
-                    .font(.headline)
-                Spacer()
-                if showsSelectionControls {
-                    Button("Clear selection") {
-                        selectedDates.removeAll()
-                    }
-                    .font(.caption.weight(.semibold))
-                    .disabled(selectedDates.isEmpty)
-                }
-            }
-
-            HStack(spacing: 12) {
-                Picker("Month", selection: monthBinding) {
-                    ForEach(1...12, id: \.self) { value in
-                        Text(DateHelpers.monthNames[value - 1]).tag(value)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(maxWidth: .infinity)
-
-                Picker("Year", selection: yearBinding) {
-                    ForEach((DateHelpers.currentYear - 1)...(DateHelpers.currentYear + 5), id: \.self) { value in
-                        Text(String(value)).tag(value)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 120)
-            }
-
-            if showsSelectionControls {
-                if selectedDates.isEmpty {
-                    Text("Select one or more days, then apply a day type below.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("\(selectedDates.count) day\(selectedDates.count == 1 ? "" : "s") selected")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.teal)
-                }
-            }
-        }
-        .padding(16)
-        .cardStyle()
-    }
-
-    private var monthBinding: Binding<Int> {
-        Binding {
-            month.month
-        } set: { nextMonth in
-            month = Month(year: month.year, month: nextMonth)
-            selectedDates = [month.defaultSelection()]
-        }
-    }
-
-    private var yearBinding: Binding<Int> {
-        Binding {
-            month.year
-        } set: { nextYear in
-            month = Month(year: nextYear, month: month.month)
-            selectedDates = [month.defaultSelection()]
-        }
-    }
-}
-
 private struct MonthCard: View {
     @EnvironmentObject private var store: AttendanceStore
     let month: Month
@@ -986,70 +711,6 @@ private struct DayCell: View {
         }
     }
 
-    private var todayLabel: String { isToday ? "\(day) • today" : "\(day)" }
-}
-
-private struct DayActionCard: View {
-    @EnvironmentObject private var store: AttendanceStore
-    let dates: Set<String>
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.headline)
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: dates.count > 1 ? "checklist" : selectedKind.icon)
-                    .font(.title2)
-                    .foregroundStyle(selectedKind.color)
-                    .frame(width: 44, height: 44)
-                    .background(selectedKind.color.opacity(0.14), in: RoundedRectangle(cornerRadius: 15))
-            }
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                ForEach(DayKind.actionKinds) { action in
-                    Button {
-                        Task { await store.set(dates: dates, to: action) }
-                    } label: {
-                        Label(action.actionTitle, systemImage: action.icon)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 11)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(action.color)
-                    .disabled(dates.isEmpty || !store.canApply(action, to: dates))
-                }
-            }
-        }
-        .padding(16)
-        .cardStyle()
-    }
-
-    private var title: String {
-        if dates.isEmpty { return "No days selected" }
-        if dates.count == 1, let only = dates.first {
-            return DateHelpers.friendlyDate(only)
-        }
-        return "\(dates.count) days selected"
-    }
-
-    private var subtitle: String {
-        if dates.isEmpty { return "Tap days in the calendar to begin." }
-        if dates.count == 1, let only = dates.first {
-            return store.kind(for: only).title
-        }
-        return "Apply one status to the selected dates."
-    }
-
-    private var selectedKind: DayKind {
-        guard dates.count == 1, let only = dates.first else { return .unassigned }
-        return store.kind(for: only)
-    }
 }
 
 private struct MonthGlanceCard: View {
@@ -1531,66 +1192,6 @@ private struct WeekCell: View {
     }
 }
 
-private struct WeekdayPatternCard: View {
-    @EnvironmentObject private var store: AttendanceStore
-    let month: Month
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Your week")
-                .sectionLabel()
-            HStack(alignment: .bottom, spacing: 18) {
-                ForEach(1...5, id: \.self) { weekday in
-                    let counts = counts(for: weekday)
-                    let total = max(counts.office + counts.wfh, 1)
-                    let pct = total == 0 ? 0 : Int(round(Double(counts.office) / Double(total) * 100))
-                    VStack(spacing: 8) {
-                        Text("\(pct)%")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(.white)
-                        VStack(spacing: 0) {
-                            Rectangle()
-                                .fill(Color.wfhPurple)
-                                .frame(height: CGFloat(counts.wfh) / CGFloat(total) * 112)
-                            Rectangle()
-                                .fill(Color.officeBlue)
-                                .frame(height: CGFloat(counts.office) / CGFloat(total) * 112)
-                        }
-                        .frame(width: 44, height: 112, alignment: .bottom)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        Text(DateHelpers.weekdayShortName(weekday))
-                            .font(.caption.weight(.heavy))
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-            Divider().overlay(Color.white.opacity(0.08))
-            HStack(spacing: 24) {
-                Spacer()
-                LegendItem("Office", color: .officeBlue)
-                LegendItem("WFH", color: .wfhPurple)
-                Spacer()
-            }
-        }
-        .padding(18)
-        .cardStyle()
-    }
-
-    private func counts(for weekday: Int) -> (office: Int, wfh: Int) {
-        var office = 0
-        var wfh = 0
-        for iso in DateHelpers.dates(from: month.startISO, through: month.endISO) where DateHelpers.weekdayNumber(iso) == weekday {
-            switch store.kind(for: iso) {
-            case .office: office += 1
-            case .wfh: wfh += 1
-            default: break
-            }
-        }
-        return (office, wfh)
-    }
-}
-
 private struct CompositionListCard: View {
     let title: String
     let metrics: Metrics
@@ -1977,346 +1578,6 @@ private struct WellbeingRow: View {
     }
 }
 
-private struct InsightHeroCard: View {
-    let title: String
-    let subtitle: String
-    let percent: Double
-    let target: Double
-    let metrics: Metrics
-
-    var body: some View {
-        let onTrack = percent >= target
-        VStack(spacing: 14) {
-            VStack(spacing: 3) {
-                Text(title)
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text("\(percent, specifier: "%.0f")%")
-                    .font(.system(size: 64, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                Text("In office")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text(subtitle)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
-
-            Text("\(onTrack ? "On track" : "Below target") · target \(target, specifier: "%.0f")%")
-                .font(.footnote.weight(.bold))
-                .foregroundStyle(onTrack ? Color.holidayGreen : Color.sickRed)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.cardBackgroundElevated, in: Capsule())
-
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.cardBackgroundElevated)
-                    .frame(height: 8)
-                Capsule()
-                    .fill(onTrack ? Color.holidayGreen : Color.sickRed)
-                    .frame(width: max(4, min(percent, 100) / 100 * 300), height: 8)
-                Rectangle()
-                    .fill(Color.white.opacity(0.35))
-                    .frame(width: 2, height: 18)
-                    .offset(x: max(0, min(target, 100) / 100 * 300))
-            }
-            .frame(maxWidth: 300, alignment: .leading)
-
-            HStack {
-                HeroStat(value: metrics.office, label: "Office", color: .officeBlue)
-                HeroStat(value: metrics.wfh, label: "WFH", color: .wfhPurple)
-                HeroStat(value: metrics.tracked, label: "Tracked", color: .holidayGreen)
-            }
-        }
-        .padding(22)
-        .cardStyle()
-    }
-}
-
-private struct HeroStat: View {
-    let value: Int
-    let label: String
-    let color: Color
-
-    var body: some View {
-        VStack(spacing: 2) {
-            Text("\(value)")
-                .font(.headline.bold())
-                .foregroundStyle(color)
-            Text(label.uppercased())
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-private struct BreakdownCard: View {
-    let metrics: Metrics
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Breakdown")
-                .font(.headline)
-            StatRow(label: "Office", value: "\(metrics.office) days", color: .officeBlue)
-            StatRow(label: "WFH", value: "\(metrics.wfh) days", color: .wfhPurple)
-            StatRow(label: "Annual leave", value: "\(metrics.leave) days", color: .leaveOrange)
-            StatRow(label: "Sickness", value: "\(metrics.sickness) days", color: .sickRed)
-            StatRow(label: "Non-working", value: "\(metrics.nwd) days", color: .nwdGray)
-            StatRow(label: "Unassigned", value: "\(metrics.unassigned) days", color: .secondary)
-            Divider()
-                .overlay(Color.white.opacity(0.08))
-            HStack {
-                Text("Working days")
-                    .foregroundStyle(.white)
-                Spacer()
-                Text("\(metrics.workingDays)")
-                    .fontWeight(.bold)
-            }
-        }
-        .padding(18)
-        .cardStyle()
-    }
-}
-
-private struct StatRow: View {
-    let label: String
-    let value: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(color)
-                .frame(width: 10, height: 10)
-            Text(label)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
-                .fontWeight(.semibold)
-                .foregroundStyle(.white)
-        }
-        .font(.body)
-    }
-}
-
-private struct MonthlyHeatmapCard: View {
-    let year: Int
-    let currentMonth: Int
-    let target: Double
-    let monthly: [Metrics]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Monthly office %")
-                .font(.headline)
-            HStack(alignment: .bottom, spacing: 5) {
-                ForEach(Array(monthly.enumerated()), id: \.offset) { index, metrics in
-                    let percent = metrics.officeShare ?? 0
-                    let isFuture = year == DateHelpers.currentYear && index + 1 > currentMonth
-                    VStack(spacing: 5) {
-                        RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill(percent >= target ? Color.holidayGreen : (percent > 0 ? Color.sickRed : Color.cardBackgroundElevated))
-                            .frame(height: max(4, CGFloat(percent) * 0.6))
-                            .opacity(isFuture ? 0.35 : 1)
-                        Text(DateHelpers.monthShortNames[index])
-                            .font(.caption2.weight(index + 1 == currentMonth ? .bold : .regular))
-                            .foregroundStyle(index + 1 == currentMonth ? Color.holidayGreen : .secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-            .frame(height: 88, alignment: .bottom)
-        }
-        .padding(18)
-        .cardStyle()
-    }
-}
-
-private struct KPIDashboardCard: View {
-    let title: String
-    let subtitle: String
-    let ringValue: Double?
-    let centerText: String
-    let centerCaption: String
-    let rows: [KPIStat]
-    let footer: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .font(.headline.weight(.heavy))
-                    .tracking(1.2)
-                Spacer()
-                Text(subtitle)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.trailing)
-            }
-
-            HStack(spacing: 18) {
-                ZStack {
-                    Circle()
-                        .stroke(Color.slate.opacity(0.5), lineWidth: 14)
-                    Circle()
-                        .trim(from: 0, to: ringValue.map { min(max($0 / 100, 0), 1) } ?? 0)
-                        .stroke(
-                            AngularGradient(colors: [.cyan, .green, .cyan], center: .center),
-                            style: StrokeStyle(lineWidth: 14, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                    VStack(spacing: 3) {
-                        Text(centerText)
-                            .font(.system(.title2, design: .rounded, weight: .heavy))
-                        Text(centerCaption.uppercased())
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(20)
-                }
-                .frame(width: 154, height: 154)
-
-                VStack(spacing: 10) {
-                    ForEach(rows) { row in
-                        HStack(spacing: 10) {
-                            Circle()
-                                .fill(row.color)
-                                .frame(width: 10, height: 10)
-                                .shadow(color: row.color.opacity(0.7), radius: 8)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(row.value)
-                                    .font(.title3.bold())
-                                Text(row.label.uppercased())
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if let percent = row.percent {
-                                Text(percent)
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-            .padding(12)
-            .background(Color.cardBackgroundElevated, in: RoundedRectangle(cornerRadius: 14))
-                    }
-                }
-            }
-
-            Divider()
-                .overlay(Color.white.opacity(0.08))
-
-            Text(footer)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-        }
-        .padding(18)
-        .cardStyle()
-    }
-}
-
-private struct LeaveDashboardCard: View {
-    let year: Int
-    let allowance: Int
-    let booked: Int
-    let takenYTD: Int
-    let bookedAhead: Int
-    let remaining: Int
-    let sickness: Int
-    let nwd: Int
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("ANNUAL LEAVE")
-                    .font(.headline.weight(.heavy))
-                    .tracking(1.2)
-                Spacer()
-                Text("\(year) · \(allowance) day allowance · \(booked) booked")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-
-            HStack(spacing: 18) {
-                ZStack {
-                    Circle()
-                        .stroke(Color.slate.opacity(0.6), lineWidth: 15)
-                    Circle()
-                        .trim(from: 0, to: allowance > 0 ? min(Double(booked) / Double(allowance), 1) : 0)
-                        .stroke(Color.leaveBooked, style: StrokeStyle(lineWidth: 15, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                    VStack(spacing: 3) {
-                        Text("\(remaining)")
-                            .font(.system(size: 24, weight: .heavy, design: .rounded))
-                            .foregroundStyle(remaining == 0 && booked > allowance ? .red : .leaveTaken)
-                        Text("DAYS LEFT")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(width: 154, height: 154)
-
-                VStack(spacing: 10) {
-                    KPICompactRow(title: "Taken (YTD)", value: "\(takenYTD)", tag: "Annual leave", color: .leaveTaken)
-                    KPICompactRow(title: "Booked ahead", value: "\(bookedAhead)", tag: "Still to take", color: .leaveBooked)
-                    KPICompactRow(title: "Unbooked pool", value: "\(remaining)", tag: "In allowance", color: .slate)
-                    KPICompactRow(title: "Days sick", value: "\(sickness)", tag: "YTD", color: .orange)
-                    KPICompactRow(title: "NWD", value: "\(nwd)", tag: "YTD", color: .teal)
-                }
-            }
-        }
-        .padding(18)
-        .cardStyle()
-    }
-}
-
-private struct KPICompactRow: View {
-    let title: String
-    let value: String
-    let tag: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(color)
-                .frame(width: 10, height: 10)
-                .shadow(color: color.opacity(0.7), radius: 8)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(value)
-                        .font(.title3.bold())
-                    Text(title.uppercased())
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-                Text(tag.uppercased())
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.cardBackgroundElevated, in: RoundedRectangle(cornerRadius: 7))
-            }
-            Spacer()
-        }
-        .padding(12)
-        .background(Color.cardBackgroundElevated, in: RoundedRectangle(cornerRadius: 14))
-    }
-}
-
-private struct KPIStat: Identifiable {
-    let id = UUID()
-    let label: String
-    let value: String
-    let percent: String?
-    let color: Color
-}
-
 private struct SettingsScreen: View {
     @EnvironmentObject private var store: AttendanceStore
     @State private var name = ""
@@ -2452,40 +1713,6 @@ private struct SettingsScreen: View {
         let parts = name.split(separator: " ")
         let raw = parts.prefix(2).compactMap(\.first).map(String.init).joined()
         return raw.isEmpty ? "OA" : raw.uppercased()
-    }
-}
-
-private struct RingMetric: View {
-    let value: Double?
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(Color.slate.opacity(0.20), lineWidth: 12)
-            Circle()
-                .trim(from: 0, to: value.map { min(max($0 / 100, 0), 1) } ?? 0)
-                .stroke(
-                    AngularGradient(colors: [.teal, .green, .teal], center: .center),
-                    style: StrokeStyle(lineWidth: 12, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-            VStack(spacing: 2) {
-                Text(value.map { "\($0, specifier: "%.0f")%" } ?? "N/A")
-                    .font(.title3.bold())
-                Text(title)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .padding(16)
-        }
-        .frame(width: 136, height: 136)
     }
 }
 
@@ -2640,14 +1867,6 @@ private final class AttendanceStore: ObservableObject {
         profile.kind(for: date)
     }
 
-    func canApply(_ kind: DayKind, to date: String) -> Bool {
-        state.canApply(kind, to: date)
-    }
-
-    func canApply(_ kind: DayKind, to dates: Set<String>) -> Bool {
-        !dates.isEmpty && dates.allSatisfy { state.canApply(kind, to: $0) }
-    }
-
     func metrics(for month: Month) -> Metrics {
         state.metrics(from: month.startISO, through: month.endISO)
     }
@@ -2660,10 +1879,6 @@ private final class AttendanceStore: ObservableObject {
         let start = "\(year)-01-01"
         let end = min(DateHelpers.todayISO(), "\(year)-12-31")
         return state.metrics(from: start, through: end)
-    }
-
-    func fullYearMetrics(year: Int) -> Metrics {
-        state.metrics(from: "\(year)-01-01", through: "\(year)-12-31")
     }
 
     func leaveBreakdown(year: Int) -> LeaveBreakdown {
@@ -2869,18 +2084,6 @@ private extension Data {
     }
 }
 
-private extension URLComponents {
-    var fragmentParameters: [String: String] {
-        guard let fragment, !fragment.isEmpty else { return [:] }
-        var components = URLComponents()
-        components.percentEncodedQuery = fragment
-        return Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item in
-            guard let value = item.value else { return nil }
-            return (item.name, value)
-        })
-    }
-}
-
 private struct AttendanceState: Codable {
     var activeProfileId: String
     var profiles: [AttendanceProfile]
@@ -2909,12 +2112,6 @@ private struct AttendanceState: Codable {
     mutating func set(date: String, to kind: DayKind) throws {
         guard let index = profiles.firstIndex(where: { $0.id == activeProfileId }) else { return }
         try profiles[index].set(date: date, to: kind)
-    }
-
-    func canApply(_ kind: DayKind, to date: String) -> Bool {
-        if kind == .unassigned { return true }
-        if kind == .nwd { return !DateHelpers.isWeekend(date) && !DateHelpers.isBankHoliday(date) }
-        return !DateHelpers.isWeekend(date) && !DateHelpers.isBankHoliday(date)
     }
 
     mutating func updateSettings(name: String, targetPct: Double, leaveAllowance: Int, year: Int) {
@@ -3347,18 +2544,6 @@ private struct Month {
         return Month(year: y, month: m)
     }
 
-    func clampedSelection(_ current: String) -> String {
-        let day = min(Int(current.suffix(2)) ?? 1, DateHelpers.daysInMonth(year: year, month: month))
-        return DateHelpers.iso(year: year, month: month, day: day)
-    }
-
-    func defaultSelection() -> String {
-        let today = DateHelpers.todayParts()
-        if today.year == year && today.month == month && !DateHelpers.isWeekend(DateHelpers.todayISO()) {
-            return DateHelpers.todayISO()
-        }
-        return gridDays.compactMap(\.iso).first { !DateHelpers.isWeekend($0) } ?? startISO
-    }
 }
 
 private struct CalendarDay: Identifiable {
@@ -3372,10 +2557,8 @@ private struct CalendarDay: Identifiable {
 }
 
 private enum DateHelpers {
-    static let weekdayLabels = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
     static let weekdayLetters = ["M", "T", "W", "T", "F", "S", "S"]
     static let monthNames = Calendar.current.monthSymbols
-    static let monthShortNames = Calendar.current.shortMonthSymbols
     static let london = TimeZone(identifier: "Europe/London") ?? .current
     static let bankHolidays: Set<String> = [
         "2025-01-01", "2025-04-18", "2025-04-21", "2025-05-05", "2025-05-26", "2025-08-25", "2025-12-25", "2025-12-26",
@@ -3401,14 +2584,6 @@ private enum DateHelpers {
 
     static func iso(year: Int, month: Int, day: Int) -> String {
         String(format: "%04d-%02d-%02d", year, month, day)
-    }
-
-    static func friendlyDate(_ iso: String) -> String {
-        guard let date = date(from: iso) else { return iso }
-        let formatter = DateFormatter()
-        formatter.timeZone = london
-        formatter.dateStyle = .full
-        return formatter.string(from: date)
     }
 
     static func date(from iso: String) -> Date? {
@@ -3448,10 +2623,6 @@ private enum DateHelpers {
         calendar.timeZone = london
         let weekday = calendar.component(.weekday, from: date)
         return ((weekday + 5) % 7) + 1
-    }
-
-    static func weekdayShortName(_ weekday: Int) -> String {
-        ["MON", "TUE", "WED", "THU", "FRI"][max(0, min(weekday - 1, 4))]
     }
 
     static func isoWeekNumber(_ iso: String) -> Int {

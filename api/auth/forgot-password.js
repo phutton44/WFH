@@ -2,7 +2,7 @@
 
 const crypto = require("crypto");
 const { Resend } = require("resend");
-const { getPool, normalizeEmail, ensureAppSchema, getRequestOrigin } = require("../_shared.js");
+const { getPool, methodNotAllowed, parseJsonBody, normalizeEmail, ensureAppSchema, getRequestOrigin } = require("../_shared.js");
 
 function hashToken(raw) {
   return crypto.createHash("sha256").update(String(raw), "utf8").digest("hex");
@@ -41,16 +41,13 @@ async function sendPasswordResetEmail({ to, resetUrl }) {
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
-    return res.status(405).json({ error: "Method not allowed" });
+    return methodNotAllowed(res, "POST");
   }
-  let body = req.body;
-  if (typeof body === "string") {
-    try {
-      body = JSON.parse(body || "{}");
-    } catch {
-      return res.status(400).json({ error: "Invalid JSON" });
-    }
+  let body;
+  try {
+    body = parseJsonBody(req);
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
   }
   const email = normalizeEmail(body?.email);
   const generic = { ok: true, message: "If that email is registered, a reset link was sent." };

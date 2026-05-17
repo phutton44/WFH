@@ -20,6 +20,7 @@ Track office vs WFH days, annual leave, and NWD on a calendar with England & Wal
    | **`DATABASE_URL`** | Neon pooled connection string (often provided by the Neon integration). |
    | **`JWT_SECRET`** | Any random string, **≥16 characters**, used only by **`api/`** to sign session JWTs. |
    | **`GOOGLE_CLIENT_ID`** | Optional. Google OAuth **Web application** client ID for “Continue with Google”. Also accepted as **`WFH_GOOGLE_CLIENT_ID`**. Add your production and local origins in Google Cloud. |
+   | **`GOOGLE_IOS_CLIENT_ID`** | Optional. Google OAuth **iOS** client ID used by the native app. Also accepted as **`WFH_GOOGLE_IOS_CLIENT_ID`**. |
    | **`RESEND_API_KEY`** | Optional but required to **send** reset mail. [Resend](https://resend.com) API key. |
    | **`RESEND_FROM_EMAIL`** | Optional but required to **send** reset mail. Verified sender in Resend (e.g. `App <noreply@yourdomain.com>`). Alias: **`RESEND_FROM`**. |
    | **`WFH_PUBLIC_ORIGIN`** | Optional. Full public site URL without a trailing slash (e.g. `https://your-app.vercel.app`). Used to build reset links when the request’s Host / forwarded headers are missing or wrong. |
@@ -40,11 +41,12 @@ If those variables are missing, **`POST /api/auth/forgot-password`** still retur
 
 ### Google sign-in
 
-Google sign-in is optional. To enable it:
+Google sign-in is optional. To enable it on the web and iOS:
 
 1. In Google Cloud Console → APIs & Services → Credentials, create an **OAuth client ID** with application type **Web application**.
 2. Add your app origins under **Authorized JavaScript origins**, for example `https://your-app.vercel.app` and local `http://localhost:3000`.
 3. In Vercel → Environment Variables, set **`GOOGLE_CLIENT_ID`** to that client ID, then redeploy. The build writes the public client ID to `config.js`; the API also uses the same value to verify Google ID tokens server-side.
+4. For iOS, create a second OAuth client with application type **iOS**, using the bundle ID from Xcode, then set **`GOOGLE_IOS_CLIENT_ID`** in Vercel and in the Xcode build setting of the same name.
 
 Users who choose **Continue with Google** are created using Google’s verified email address and receive the same app JWT session as email/password users. Existing password users can also use Google if the Google account has the same verified email address.
 
@@ -102,7 +104,9 @@ WFH_PUBLIC_API_BASE=https://your-app.vercel.app npm run mac:package
 
 ## 6. iOS app (Swift)
 
-The iOS project lives at **`ios/WFHAttendanceIOS.xcodeproj`**. It is a native dark-mode SwiftUI app that talks to the same Vercel/Neon backend as the web app. It supports email sign-in/register, synced attendance state, separate Calendar / KPIs / Settings tabs, KPI dashboards, a native month planner with multi-select, day-type actions, and settings.
+The iOS project lives at **`ios/WFHAttendanceIOS.xcodeproj`**. It is a native dark-mode SwiftUI app that talks to the same Vercel/Neon backend as the web app. It supports Google sign-in, synced attendance state, separate Calendar / Insights / Settings tabs, a native month planner with multi-select, day-type actions, and compact month/year insights.
+
+Apple sign-in is intentionally disabled for the current free Xcode Personal Team setup, because Apple does not allow the Sign in with Apple capability on Personal Teams. The backend route is still present for a future paid Apple Developer account.
 
 To test it:
 
@@ -111,7 +115,7 @@ To test it:
 3. Pick an iPhone simulator.
 4. Press **Run**.
 
-Current bundle id: **`com.paulhutton.wfhattendance.ios`**.
+Current bundle id: **`com.paulhutton.wfhattendance.ios`**. Current display name: **`CUPA Attendence`**.
 
 ## 7. Security notes
 

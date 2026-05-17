@@ -1,11 +1,10 @@
 "use strict";
 
-const { getPool, requireAuth, ensureAppSchema } = require("../_shared.js");
+const { getPool, requireAuth, methodNotAllowed, ensureAppSchema } = require("../_shared.js");
 
 module.exports = async (req, res) => {
   if (req.method !== "GET") {
-    res.setHeader("Allow", "GET");
-    return res.status(405).json({ error: "Method not allowed" });
+    return methodNotAllowed(res, "GET");
   }
   const auth = requireAuth(req);
   if (auth.error) {
