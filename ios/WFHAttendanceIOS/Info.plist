@@ -31,6 +31,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ENABLE_APPLE_SIGN_IN</key>
+	<string>$(ENABLE_APPLE_SIGN_IN)</string>
 	<key>GOOGLE_IOS_CALLBACK_SCHEME</key>
 	<string>$(GOOGLE_IOS_CALLBACK_SCHEME)</string>
 	<key>GOOGLE_IOS_CLIENT_ID</key>

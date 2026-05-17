@@ -1,0 +1,8 @@
+.cache
+dist
+ios
+node_modules
+*.dmg
+*.zip
+*.xcarchive
+DerivedData

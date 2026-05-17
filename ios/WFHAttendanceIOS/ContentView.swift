@@ -1,4 +1,5 @@
 import AuthenticationServices
+import CryptoKit
 import SwiftUI
 import UIKit
 
@@ -33,10 +34,6 @@ struct ContentView: View {
 
 private struct AuthView: View {
     @EnvironmentObject private var store: AttendanceStore
-    @State private var mode: AuthMode = .signIn
-    @State private var email = ""
-    @State private var password = ""
-    @State private var confirmPassword = ""
     @StateObject private var googleAuth = GoogleOAuthCoordinator()
 
     var body: some View {
@@ -59,68 +56,28 @@ private struct AuthView: View {
                         }
                         .padding(.top, 44)
 
-                        VStack(spacing: 18) {
-                            Picker("Mode", selection: $mode) {
-                                Text("Sign in").tag(AuthMode.signIn)
-                                Text("Create").tag(AuthMode.register)
+                        VStack(spacing: 16) {
+                            if store.isBusy {
+                                ProgressView()
+                                    .tint(.white)
                             }
-                            .pickerStyle(.segmented)
-
-                            VStack(spacing: 14) {
-                                TextField("Email", text: $email)
-                                    .textInputAutocapitalization(.never)
-                                    .keyboardType(.emailAddress)
-                                    .textContentType(.emailAddress)
-                                    .inputStyle()
-
-                                SecureField("Password", text: $password)
-                                    .textContentType(mode == .signIn ? .password : .newPassword)
-                                    .inputStyle()
-
-                                if mode == .register {
-                                    SecureField("Confirm password", text: $confirmPassword)
-                                        .textContentType(.newPassword)
-                                        .inputStyle()
-
-                                    Text("Use at least 12 characters, one uppercase letter, and one special character.")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                            }
-
-                            Button {
-                                Task { await submit() }
-                            } label: {
-                                HStack {
-                                    if store.isBusy {
-                                        ProgressView()
-                                            .tint(.white)
-                                    }
-                                    Text(mode == .signIn ? "Sign in" : "Create account")
-                                        .fontWeight(.semibold)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 15)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.large)
-                            .disabled(store.isBusy)
 
                             VStack(spacing: 10) {
-                                Text("or continue with")
+                                Text("Continue with your ID")
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(.secondary)
 
                                 HStack(spacing: 10) {
-                                    SignInWithAppleButton(.continue) { request in
-                                        request.requestedScopes = [.email]
-                                    } onCompletion: { result in
-                                        Task { await store.handleAppleSignIn(result) }
+                                    if Bundle.main.appleSignInEnabled {
+                                        SignInWithAppleButton(.continue) { request in
+                                            request.requestedScopes = [.email]
+                                        } onCompletion: { result in
+                                            Task { await store.handleAppleSignIn(result) }
+                                        }
+                                        .signInWithAppleButtonStyle(.white)
+                                        .frame(height: 48)
+                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                     }
-                                    .signInWithAppleButtonStyle(.white)
-                                    .frame(height: 48)
-                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                                     Button {
                                         Task { await signInWithGoogle() }
@@ -154,23 +111,6 @@ private struct AuthView: View {
         }
     }
 
-    private func submit() async {
-        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !password.isEmpty else {
-            store.presentError("Enter your email and password.")
-            return
-        }
-        if mode == .register {
-            guard password == confirmPassword else {
-                store.presentError("Those passwords do not match.")
-                return
-            }
-            await store.register(email: trimmed, password: password)
-        } else {
-            await store.signIn(email: trimmed, password: password)
-        }
-    }
-
     private func signInWithGoogle() async {
         do {
             let idToken = try await googleAuth.signIn()
@@ -181,38 +121,46 @@ private struct AuthView: View {
     }
 }
 
-private enum AuthMode {
-    case signIn
-    case register
-}
-
 private final class GoogleOAuthCoordinator: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
     private var session: ASWebAuthenticationSession?
 
     func signIn() async throws -> String {
         let clientID = Bundle.main.googleIOSClientID
         guard !clientID.isEmpty else {
-            throw AppError.message("Google sign-in needs GOOGLE_IOS_CLIENT_ID set in the iOS app configuration.")
+            throw AppError.message("Google sign-in is not configured yet. Add a Google iOS OAuth client ID to GOOGLE_IOS_CLIENT_ID in Xcode.")
         }
         guard let callbackScheme = Bundle.main.googleIOSCallbackScheme ?? clientID.googleCallbackScheme else {
             throw AppError.message("Google sign-in needs an iOS OAuth callback scheme configured.")
         }
 
         let redirectURI = "\(callbackScheme):/oauth2redirect"
+        let codeVerifier = Self.makeCodeVerifier()
+        let codeChallenge = Self.codeChallenge(for: codeVerifier)
         var components = URLComponents(string: "https://accounts.google.com/o/oauth2/v2/auth")!
         components.queryItems = [
             URLQueryItem(name: "client_id", value: clientID),
             URLQueryItem(name: "redirect_uri", value: redirectURI),
-            URLQueryItem(name: "response_type", value: "id_token"),
+            URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "scope", value: "openid email"),
-            URLQueryItem(name: "nonce", value: UUID().uuidString),
+            URLQueryItem(name: "code_challenge", value: codeChallenge),
+            URLQueryItem(name: "code_challenge_method", value: "S256"),
             URLQueryItem(name: "prompt", value: "select_account")
         ]
         guard let url = components.url else {
             throw AppError.message("Could not start Google sign-in.")
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
+        let code = try await requestAuthorizationCode(url: url, callbackScheme: callbackScheme)
+        return try await exchangeCodeForIDToken(
+            code: code,
+            clientID: clientID,
+            redirectURI: redirectURI,
+            codeVerifier: codeVerifier
+        )
+    }
+
+    private func requestAuthorizationCode(url: URL, callbackScheme: String) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
             let session = ASWebAuthenticationSession(url: url, callbackURLScheme: callbackScheme) { callbackURL, error in
                 self.session = nil
                 if let error {
@@ -224,12 +172,16 @@ private final class GoogleOAuthCoordinator: NSObject, ObservableObject, ASWebAut
                     return
                 }
                 guard let callbackURL,
-                      let token = callbackURL.fragmentParameters["id_token"],
-                      !token.isEmpty else {
-                    continuation.resume(throwing: AppError.message("Google did not return a sign-in credential. Try again."))
+                      let code = callbackURL.queryParameters["code"],
+                      !code.isEmpty else {
+                    if let message = callbackURL?.queryParameters["error_description"] ?? callbackURL?.queryParameters["error"] {
+                        continuation.resume(throwing: AppError.message(message))
+                    } else {
+                        continuation.resume(throwing: AppError.message("Google did not return an authorization code. Try again."))
+                    }
                     return
                 }
-                continuation.resume(returning: token)
+                continuation.resume(returning: code)
             }
             session.presentationContextProvider = self
             session.prefersEphemeralWebBrowserSession = true
@@ -239,6 +191,49 @@ private final class GoogleOAuthCoordinator: NSObject, ObservableObject, ASWebAut
                 continuation.resume(throwing: AppError.message("Could not start Google sign-in."))
             }
         }
+    }
+
+    private func exchangeCodeForIDToken(code: String, clientID: String, redirectURI: String, codeVerifier: String) async throws -> String {
+        var request = URLRequest(url: URL(string: "https://oauth2.googleapis.com/token")!)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 28
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        var body = URLComponents()
+        body.queryItems = [
+            URLQueryItem(name: "client_id", value: clientID),
+            URLQueryItem(name: "code", value: code),
+            URLQueryItem(name: "code_verifier", value: codeVerifier),
+            URLQueryItem(name: "grant_type", value: "authorization_code"),
+            URLQueryItem(name: "redirect_uri", value: redirectURI)
+        ]
+        request.httpBody = body.percentEncodedQuery?.data(using: .utf8)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            if let error = try? JSONDecoder().decode(GoogleTokenError.self, from: data) {
+                throw AppError.message(error.errorDescription ?? error.error)
+            }
+            throw AppError.message("Google token exchange failed.")
+        }
+
+        let tokenResponse = try JSONDecoder().decode(GoogleTokenResponse.self, from: data)
+        guard !tokenResponse.idToken.isEmpty else {
+            throw AppError.message("Google did not return a sign-in credential. Try again.")
+        }
+        return tokenResponse.idToken
+    }
+
+    private static func makeCodeVerifier() -> String {
+        let alphabet = Array("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
+        return String((0..<64).compactMap { _ in alphabet.randomElement() })
+    }
+
+    private static func codeChallenge(for verifier: String) -> String {
+        let digest = SHA256.hash(data: Data(verifier.utf8))
+        return Data(digest).base64URLEncodedString()
     }
 
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
@@ -2507,14 +2502,6 @@ private final class AttendanceStore: ObservableObject {
         }
     }
 
-    func signIn(email: String, password: String) async {
-        await authenticate(path: "/api/auth/login", email: email, password: password)
-    }
-
-    func register(email: String, password: String) async {
-        await authenticate(path: "/api/auth/register", email: email, password: password)
-    }
-
     func signInWithGoogle(idToken: String) async {
         await authenticateSocial(path: "/api/auth/google", idToken: idToken)
     }
@@ -2638,18 +2625,6 @@ private final class AttendanceStore: ObservableObject {
         state.leaveBreakdown(year: year, today: DateHelpers.todayISO())
     }
 
-    private func authenticate(path: String, email: String, password: String) async {
-        isBusy = true
-        defer { isBusy = false }
-        do {
-            let body = AuthRequest(email: email, password: password)
-            let response: AuthResponse = try await client.request(path: path, method: "POST", body: body)
-            await finishAuthentication(response)
-        } catch {
-            presentError(error.localizedDescription)
-        }
-    }
-
     private func authenticateSocial(path: String, idToken: String) async {
         isBusy = true
         defer { isBusy = false }
@@ -2741,13 +2716,26 @@ private enum AppError: LocalizedError {
 
 // MARK: - Models
 
-private struct AuthRequest: Encodable {
-    let email: String
-    let password: String
-}
-
 private struct SocialAuthRequest: Encodable {
     let idToken: String
+}
+
+private struct GoogleTokenResponse: Decodable {
+    let idToken: String
+
+    private enum CodingKeys: String, CodingKey {
+        case idToken = "id_token"
+    }
+}
+
+private struct GoogleTokenError: Decodable {
+    let error: String
+    let errorDescription: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case error
+        case errorDescription = "error_description"
+    }
 }
 
 private struct AuthResponse: Decodable {
@@ -2783,6 +2771,12 @@ private extension Bundle {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return value.isEmpty ? nil : value
     }
+
+    var appleSignInEnabled: Bool {
+        String(object(forInfoDictionaryKey: "ENABLE_APPLE_SIGN_IN") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased() == "YES"
+    }
 }
 
 private extension String {
@@ -2794,6 +2788,23 @@ private extension String {
 }
 
 private extension URL {
+    var queryParameters: [String: String] {
+        URLComponents(url: self, resolvingAgainstBaseURL: false)?.queryItems?.reduce(into: [:]) { result, item in
+            result[item.name] = item.value
+        } ?? [:]
+    }
+}
+
+private extension Data {
+    func base64URLEncodedString() -> String {
+        base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+}
+
+private extension URLComponents {
     var fragmentParameters: [String: String] {
         guard let fragment, !fragment.isEmpty else { return [:] }
         var components = URLComponents()
