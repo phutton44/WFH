@@ -261,7 +261,7 @@ private struct AttendanceHomeView: View {
             NavigationStack {
                 KPIScreen()
             }
-            .tabItem { Label("KPIs", systemImage: "chart.bar.xaxis") }
+            .tabItem { Label("Insights", systemImage: "chart.bar.xaxis") }
             .tag(HomeTab.kpis)
 
             NavigationStack {
@@ -452,7 +452,7 @@ private struct CalendarScreen: View {
     @State private var visibleMonth = Month.current()
     @State private var selectedDates: Set<String> = []
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 5), count: 7)
 
     var body: some View {
         let metrics = store.metrics(for: visibleMonth)
@@ -810,7 +810,7 @@ private struct MonthCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            LazyVGrid(columns: columns, spacing: 4) {
+            LazyVGrid(columns: columns, spacing: 5) {
                 ForEach(Array(DateHelpers.weekdayLetters.enumerated()), id: \.offset) { _, label in
                     Text(label)
                         .font(.caption.weight(.bold))
@@ -837,7 +837,7 @@ private struct MonthCard: View {
                         }
                     } else {
                         Color.clear
-                            .frame(height: 39)
+                            .frame(height: 42)
                     }
                 }
             }
@@ -849,13 +849,17 @@ private struct MonthCard: View {
 
 private struct CalendarLegend: View {
     var body: some View {
-        HStack(spacing: 6) {
-            LegendItem("Office", color: .officeBlue)
-            LegendItem("WFH", color: .wfhPurple)
-            LegendItem("Leave", color: .leaveOrange)
-            LegendItem("Sick", color: .sickRed)
-            LegendItem("NWD", color: .nwdGray)
-            LegendItem("Bank holiday", color: .holidayGreen)
+        HStack {
+            Spacer(minLength: 0)
+            HStack(spacing: 6) {
+                LegendItem("Office", color: .officeBlue)
+                LegendItem("WFH", color: .wfhPurple)
+                LegendItem("Leave", color: .leaveOrange)
+                LegendItem("Sick", color: .holidayGreen)
+                LegendItem("NWD", color: .nwdGray)
+                LegendItem("Bank holiday", color: .sickRed)
+            }
+            Spacer(minLength: 0)
         }
         .font(.system(size: 9, weight: .semibold))
         .foregroundStyle(.secondary)
@@ -891,23 +895,31 @@ private struct DayCell: View {
     let isToday: Bool
 
     var body: some View {
-        VStack(spacing: 5) {
-            Text("\(day)")
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(kind.tileLabel)
-                .font(.system(size: 8, weight: .heavy))
-                .tracking(0.55)
-                .lineLimit(1)
-                .minimumScaleFactor(0.62)
+        ZStack {
+            dayNumber
+                .offset(y: kind.tileLabel.isEmpty ? 0 : -6)
+
+            if !kind.tileLabel.isEmpty {
+                VStack {
+                    Spacer()
+                    Text(kind.tileLabel)
+                        .font(.system(size: 10, weight: .heavy))
+                        .tracking(0.55)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.62)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .foregroundStyle(tagColor)
+                        .padding(.bottom, 5)
+                }
+            }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 39)
-        .background(cellBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .frame(height: 42)
+        .background(cellBackground, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .overlay {
             ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .stroke(borderColor, lineWidth: isSelected ? 2.5 : (isToday ? 1.5 : 0))
                 if isToday {
                     Circle()
@@ -917,8 +929,17 @@ private struct DayCell: View {
                 }
             }
         }
-        .foregroundStyle(foregroundColor)
         .opacity(kind == .weekend ? 0.58 : 1)
+    }
+
+    private var dayNumber: some View {
+        Text("\(day)")
+            .font(.system(size: 22, weight: .bold, design: .rounded))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .foregroundStyle(foregroundColor)
     }
 
     private var cellBackground: Color {
@@ -931,11 +952,11 @@ private struct DayCell: View {
         case .leave:
             return Color.leaveOrange.opacity(0.82)
         case .sickness:
-            return Color.sickRed.opacity(0.82)
+            return Color.holidayGreen.opacity(0.82)
         case .nwd:
             return Color.nwdGray.opacity(0.45)
         case .bankHoliday:
-            return Color.holidayGreen.opacity(0.82)
+            return Color.sickRed.opacity(0.82)
         case .weekend:
             return Color.clear
         case .unassigned:
@@ -951,9 +972,18 @@ private struct DayCell: View {
 
     private var foregroundColor: Color {
         if kind == .weekend { return Color.slate }
-        if kind == .leave && isSelected { return Color.black.opacity(0.8) }
+        if !kind.tileLabel.isEmpty { return Color.black.opacity(0.82) }
         if kind == .unassigned { return .secondary }
         return .white
+    }
+
+    private var tagColor: Color {
+        switch kind {
+        case .office, .wfh, .leave, .sickness, .nwd, .bankHoliday:
+            return Color.black.opacity(0.82)
+        case .weekend, .unassigned:
+            return .secondary
+        }
     }
 
     private var todayLabel: String { isToday ? "\(day) • today" : "\(day)" }
@@ -1238,8 +1268,8 @@ private struct KPIScreen: View {
                 InsightsMonthHeader(
                     month: month,
                     mode: mode,
-                    previous: { month = month.shifted(by: -1) },
-                    next: { month = month.shifted(by: 1) },
+                    previous: { moveInsightsPeriod(-1) },
+                    next: { moveInsightsPeriod(1) },
                     today: { month = Month.current() }
                 )
 
@@ -1261,8 +1291,8 @@ private struct KPIScreen: View {
                     CompositionListCard(title: "\(DateHelpers.monthNames[month.month - 1]) composition", metrics: monthMetrics)
                 } else {
                     QuarterScoreboardCard(year: month.year, target: target)
-                    StreaksHabitsCard(year: month.year)
                     AnnualLeaveGaugeCard(leave: leave)
+                    StreaksHabitsCard(year: month.year)
                     WellbeingCard(metrics: ytdMetrics, year: month.year)
                 }
 
@@ -1279,6 +1309,14 @@ private struct KPIScreen: View {
         .toolbar(.hidden, for: .navigationBar)
         .refreshable {
             await store.loadState()
+        }
+    }
+
+    private func moveInsightsPeriod(_ direction: Int) {
+        if mode == .yearToDate {
+            month = Month(year: month.year + direction, month: month.month)
+        } else {
+            month = month.shifted(by: direction)
         }
     }
 }
@@ -1609,9 +1647,9 @@ private struct LeaveSnapshotCard: View {
             Text("Leave snapshot")
                 .sectionLabel()
             VStack(spacing: 0) {
-                CompositionRow(label: "Taken", value: leave.taken, color: .leaveOrange)
+                CompositionRow(label: "Taken", value: leave.taken, color: .leaveTaken)
                 Divider().overlay(Color.white.opacity(0.08))
-                CompositionRow(label: "Booked ahead", value: leave.booked, color: .leaveOrange.opacity(0.6))
+                CompositionRow(label: "Booked ahead", value: leave.booked, color: .leaveBooked)
                 Divider().overlay(Color.white.opacity(0.08))
                 CompositionRow(label: "Remaining", value: leave.remaining, color: Color.white.opacity(0.20))
             }
@@ -1814,7 +1852,7 @@ private struct AnnualLeaveGaugeCard: View {
                     .overlay(alignment: .bottom) {
                         VStack(spacing: 2) {
                             Text("\(leave.remaining)")
-                                .font(.system(size: 31, weight: .bold, design: .rounded))
+                                .font(.system(size: 25, weight: .bold, design: .rounded))
                                 .foregroundStyle(.white)
                             Text("DAYS LEFT")
                                 .font(.system(size: 9, weight: .heavy))
@@ -1824,7 +1862,7 @@ private struct AnnualLeaveGaugeCard: View {
                     }
                 Divider().overlay(Color.white.opacity(0.08))
                 HStack {
-                    GaugeStat(label: "Taken", value: leave.taken, color: .leaveOrange)
+                    GaugeStat(label: "Taken", value: leave.taken, color: .leaveTaken)
                     GaugeStat(label: "Booked", value: leave.booked, color: .leaveBooked)
                     GaugeStat(label: "Allowance", value: leave.allowance, color: .nwdGray)
                 }
@@ -1853,7 +1891,7 @@ private struct LeaveArc: View {
             ArcShape()
                 .stroke(Color.leaveBooked.opacity(0.75), style: StrokeStyle(lineWidth: 18, lineCap: .round))
             ArcShape(end: progress)
-                .stroke(Color.leaveOrange, style: StrokeStyle(lineWidth: 18, lineCap: .round))
+                .stroke(Color.leaveTaken, style: StrokeStyle(lineWidth: 18, lineCap: .round))
         }
     }
 }
@@ -2210,12 +2248,12 @@ private struct LeaveDashboardCard: View {
                         .stroke(Color.slate.opacity(0.6), lineWidth: 15)
                     Circle()
                         .trim(from: 0, to: allowance > 0 ? min(Double(booked) / Double(allowance), 1) : 0)
-                        .stroke(Color.pink, style: StrokeStyle(lineWidth: 15, lineCap: .round))
+                        .stroke(Color.leaveBooked, style: StrokeStyle(lineWidth: 15, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                     VStack(spacing: 3) {
                         Text("\(remaining)")
-                            .font(.system(.title, design: .rounded, weight: .heavy))
-                            .foregroundStyle(remaining == 0 && booked > allowance ? .red : .pink)
+                            .font(.system(size: 24, weight: .heavy, design: .rounded))
+                            .foregroundStyle(remaining == 0 && booked > allowance ? .red : .leaveTaken)
                         Text("DAYS LEFT")
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
@@ -2224,8 +2262,8 @@ private struct LeaveDashboardCard: View {
                 .frame(width: 154, height: 154)
 
                 VStack(spacing: 10) {
-                    KPICompactRow(title: "Taken (YTD)", value: "\(takenYTD)", tag: "Annual leave", color: .pink)
-                    KPICompactRow(title: "Booked ahead", value: "\(bookedAhead)", tag: "Still to take", color: .purple)
+                    KPICompactRow(title: "Taken (YTD)", value: "\(takenYTD)", tag: "Annual leave", color: .leaveTaken)
+                    KPICompactRow(title: "Booked ahead", value: "\(bookedAhead)", tag: "Still to take", color: .leaveBooked)
                     KPICompactRow(title: "Unbooked pool", value: "\(remaining)", tag: "In allowance", color: .slate)
                     KPICompactRow(title: "Days sick", value: "\(sickness)", tag: "YTD", color: .orange)
                     KPICompactRow(title: "NWD", value: "\(nwd)", tag: "YTD", color: .teal)
@@ -2287,76 +2325,82 @@ private struct SettingsScreen: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 18) {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Profile")
-                        .font(.headline)
+            VStack(spacing: 12) {
+                Text("Somehow shipped by non-dev Paul Hutton · 17 May 2026")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8)
 
-                    HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 11) {
+                    Text("Profile")
+                        .font(.subheadline.weight(.bold))
+
+                    HStack(spacing: 10) {
                         Text(initials)
-                            .font(.title3.weight(.bold))
+                            .font(.headline.weight(.bold))
                             .foregroundStyle(.white)
-                            .frame(width: 56, height: 56)
+                            .frame(width: 42, height: 42)
                             .background(
                                 LinearGradient(colors: [.holidayGreen, .wfhPurple], startPoint: .topLeading, endPoint: .bottomTrailing),
                                 in: Circle()
                             )
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 5) {
                             TextField("Your name", text: $name)
-                                .font(.body.weight(.semibold))
+                                .font(.subheadline.weight(.semibold))
                                 .textInputAutocapitalization(.words)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .background(Color.cardBackgroundElevated, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .background(Color.cardBackgroundElevated, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                             Text(store.user?.email ?? "")
-                                .font(.caption)
+                                .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
                     }
                 }
-                .padding(18)
+                .padding(13)
                 .cardStyle()
 
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 11) {
                     Text("KPI settings")
-                        .font(.headline)
+                        .font(.subheadline.weight(.bold))
 
                     HStack {
                         Text("Office target")
-                            .font(.title3.weight(.semibold))
+                            .font(.subheadline.weight(.semibold))
                         Spacer()
                         Text("\(targetPct, specifier: "%.1f")%")
-                            .font(.title3.weight(.semibold))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
                     Slider(value: $targetPct, in: 0...100, step: 0.5)
                         .tint(.cyan)
                 }
-                .padding(18)
+                .padding(13)
                 .cardStyle()
 
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 11) {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Annual leave")
-                                .font(.headline)
-                            Text("\(DateHelpers.currentYear) allowance")
-                                .font(.caption.weight(.semibold))
+                                .font(.subheadline.weight(.bold))
+                            Text("\(String(DateHelpers.currentYear)) allowance")
+                                .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
                         Text("\(Int(leaveAllowance)) days")
-                            .font(.title3.weight(.bold))
+                            .font(.headline.weight(.bold))
                     }
 
                     Stepper(value: $leaveAllowance, in: 0...60, step: 1) {
                         Text("Annual allowance")
-                            .font(.body.weight(.medium))
+                            .font(.subheadline.weight(.medium))
                     }
                     .tint(.cyan)
                 }
-                .padding(18)
+                .padding(13)
                 .cardStyle()
 
                 Button {
@@ -2370,30 +2414,30 @@ private struct SettingsScreen: View {
                     }
                 } label: {
                     Label("Save settings", systemImage: "checkmark.circle.fill")
-                        .font(.headline)
+                        .font(.subheadline.weight(.bold))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
+                        .padding(.vertical, 10)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.cyan)
 
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 9) {
                     Text("Account")
-                        .font(.headline)
+                        .font(.subheadline.weight(.bold))
                     Text(store.user?.email ?? "")
-                        .font(.body)
+                        .font(.subheadline)
                         .textSelection(.enabled)
                     Divider()
                         .overlay(Color.white.opacity(0.08))
                     Button("Sign out", role: .destructive) {
                         store.signOut()
                     }
-                    .font(.body.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                 }
-                .padding(18)
+                .padding(13)
                 .cardStyle()
             }
-            .padding(16)
+            .padding(12)
         }
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle("Settings")
@@ -2536,6 +2580,7 @@ private final class AttendanceStore: ObservableObject {
                 state = AttendanceState.defaultState()
                 await saveState()
             }
+            repairDefaultProfileNameIfNeeded()
             persistState()
         } catch {
             presentError(error.localizedDescription)
@@ -2640,11 +2685,17 @@ private final class AttendanceStore: ObservableObject {
     private func finishAuthentication(_ response: AuthResponse) async {
         client.token = response.token
         user = response.user
+        repairDefaultProfileNameIfNeeded()
         UserDefaults.standard.set(response.token, forKey: tokenKey)
         if let userData = try? JSONEncoder().encode(response.user) {
             UserDefaults.standard.set(userData, forKey: userKey)
         }
         await loadState()
+    }
+
+    private func repairDefaultProfileNameIfNeeded() {
+        guard let user else { return }
+        state.repairDefaultProfileName(using: user.displayName)
     }
 
     private func saveState() async {
@@ -2746,6 +2797,20 @@ private struct AuthResponse: Decodable {
 private struct AuthUser: Codable {
     let id: String
     let email: String
+
+    var displayName: String {
+        let localPart = email.split(separator: "@").first.map(String.init) ?? ""
+        let cleaned = localPart
+            .replacingOccurrences(of: ".", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+        let words = cleaned
+            .split(separator: " ")
+            .map { word in
+                word.prefix(1).uppercased() + word.dropFirst().lowercased()
+            }
+        return words.isEmpty ? email : words.joined(separator: " ")
+    }
 }
 
 private struct StateResponse: Decodable {
@@ -2860,6 +2925,15 @@ private struct AttendanceState: Codable {
         }
         profiles[index].settings.targetPct = targetPct
         profiles[index].settings.leaveAllowances[String(year)] = leaveAllowance
+    }
+
+    mutating func repairDefaultProfileName(using name: String) {
+        guard let index = profiles.firstIndex(where: { $0.id == activeProfileId }) else { return }
+        let current = profiles[index].name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard current.isEmpty || current == "Default profile" else { return }
+        let replacement = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !replacement.isEmpty else { return }
+        profiles[index].name = replacement
     }
 
     func metrics(from start: String, through end: String) -> Metrics {
@@ -3200,11 +3274,11 @@ private enum DayKind: String, Codable, Identifiable {
         case .office: .officeBlue
         case .wfh: .wfhPurple
         case .leave: .leaveOrange
-        case .sickness: .sickRed
+        case .sickness: .holidayGreen
         case .nwd: .nwdGray
         case .unassigned: .blue
         case .weekend: .gray
-        case .bankHoliday: .holidayGreen
+        case .bankHoliday: .sickRed
         }
     }
 
@@ -3497,7 +3571,9 @@ private extension Color {
 
     static let leaveOrange = Color(hex: "FF9F0A")
 
-    static let leaveBooked = Color(hex: "9C6A28")
+    static let leaveTaken = Color(hex: "FFD60A")
+
+    static let leaveBooked = Color(hex: "FF6B6B")
 
     static let sickRed = Color(hex: "FF453A")
 
