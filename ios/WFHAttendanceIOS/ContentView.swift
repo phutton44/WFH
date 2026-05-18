@@ -780,7 +780,6 @@ private struct CompositionBar: View {
                 Segment(count: metrics.wfh, total: metrics.workingDays, width: proxy.size.width, color: .wfhPurple)
                 Segment(count: metrics.leave, total: metrics.workingDays, width: proxy.size.width, color: .leaveOrange)
                 Segment(count: metrics.sickness, total: metrics.workingDays, width: proxy.size.width, color: .sickRed)
-                Segment(count: metrics.nwd, total: metrics.workingDays, width: proxy.size.width, color: .nwdGray)
                 Segment(count: metrics.unassigned, total: metrics.workingDays, width: proxy.size.width, color: Color.white.opacity(0.18))
             }
             .clipShape(Capsule())
@@ -1047,19 +1046,21 @@ private struct InsightDonutHero: View {
                 }
                 .frame(maxWidth: .infinity)
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 5) {
                     HeroKeyRow(value: metrics.office, label: "Office", color: .officeBlue)
                     HeroKeyRow(value: metrics.wfh, label: "WFH", color: .wfhPurple)
                     HeroKeyRow(value: metrics.tracked, label: "Worked", color: Color.white.opacity(0.78))
                 }
-                .frame(width: 92, alignment: .leading)
+                .frame(width: 112, alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .trailing)
+                .offset(x: 12)
             }
 
             Text(percent >= target ? "On Target" : "Below Target")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(percent >= target ? Color.holidayGreen : Color.sickRed)
                 .padding(.top, 2)
+                .offset(y: 4)
         }
         .padding(11)
         .cardStyle()
@@ -1072,18 +1073,20 @@ private struct HeroKeyRow: View {
     let color: Color
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 7) {
             RoundedRectangle(cornerRadius: 3)
                 .fill(color)
-                .frame(width: 7, height: 7)
+                .frame(width: 8, height: 8)
             Text("\(value)")
-                .font(.caption.weight(.bold))
+                .font(.subheadline.weight(.bold))
                 .foregroundStyle(.white)
-                .frame(width: 18, alignment: .leading)
+                .frame(width: 25, alignment: .leading)
             Text(label.uppercased())
-                .font(.system(size: 8, weight: .heavy))
-                .tracking(0.5)
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(0.35)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
             Spacer(minLength: 0)
         }
     }
@@ -1202,7 +1205,7 @@ private struct CompositionListCard: View {
                 .sectionLabel()
             VStack(alignment: .leading, spacing: 9) {
                 CompositionBar(metrics: metrics)
-                Text("\(metrics.tracked + metrics.leave + metrics.sickness + metrics.nwd) of \(metrics.workingDays) working days logged")
+                Text("\(metrics.tracked + metrics.leave + metrics.sickness) of \(metrics.workingDays) working days logged")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                 CompositionRow(label: "Office", value: metrics.office, color: .officeBlue)
@@ -1377,7 +1380,7 @@ private struct StreaksHabitsCard: View {
 
     private func computeStreaks() -> (longestOffice: Int, longestWfh: Int, currentOffice: Int) {
         let dates = DateHelpers.dates(from: "\(year)-01-01", through: min(DateHelpers.todayISO(), "\(year)-12-31"))
-            .filter { DateHelpers.isMetricsWorkingDay($0, excludingNWD: []) }
+            .filter { DateHelpers.isMetricsWorkingDay($0, excludingNWD: []) && store.kind(for: $0) != .nwd }
         var longestOffice = 0
         var longestWfh = 0
         var officeRun = 0
@@ -1583,15 +1586,12 @@ private struct SettingsScreen: View {
     @State private var name = ""
     @State private var targetPct = 40.0
     @State private var leaveAllowance = 25.0
+    @State private var hasLoadedSettings = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 12) {
-                Text("Somehow shipped by non-dev Paul Hutton · 17 May 2026")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 8)
+                ShippedByPaulCard()
 
                 VStack(alignment: .leading, spacing: 11) {
                     Text("Profile")
@@ -1664,24 +1664,6 @@ private struct SettingsScreen: View {
                 .padding(13)
                 .cardStyle()
 
-                Button {
-                    Task {
-                        await store.updateSettings(
-                            name: name,
-                            targetPct: targetPct,
-                            leaveAllowance: Int(leaveAllowance),
-                            year: DateHelpers.currentYear
-                        )
-                    }
-                } label: {
-                    Label("Save settings", systemImage: "checkmark.circle.fill")
-                        .font(.subheadline.weight(.bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.cyan)
-
                 VStack(alignment: .leading, spacing: 9) {
                     Text("Account")
                         .font(.subheadline.weight(.bold))
@@ -1706,13 +1688,70 @@ private struct SettingsScreen: View {
             name = store.profile.name
             targetPct = store.profile.settings.targetPct
             leaveAllowance = Double(store.profile.allowance(for: DateHelpers.currentYear))
+            hasLoadedSettings = true
         }
+        .task(id: autosaveKey) {
+            guard hasLoadedSettings else { return }
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled else { return }
+            await store.updateSettings(
+                name: name,
+                targetPct: targetPct,
+                leaveAllowance: Int(leaveAllowance),
+                year: DateHelpers.currentYear
+            )
+        }
+    }
+
+    private var autosaveKey: String {
+        "\(name)|\(targetPct)|\(Int(leaveAllowance))"
     }
 
     private var initials: String {
         let parts = name.split(separator: " ")
         let raw = parts.prefix(2).compactMap(\.first).map(String.init).joined()
         return raw.isEmpty ? "OA" : raw.uppercased()
+    }
+}
+
+private struct ShippedByPaulCard: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            Image("PaulAvatar")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 64, height: 64)
+                .clipShape(Circle())
+                .padding(5)
+                .background(Color.black, in: Circle())
+                .overlay {
+                    Circle()
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                }
+                .shadow(color: Color.black.opacity(0.35), radius: 10, x: 0, y: 6)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Somehow shipped")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white)
+                Text("Vibe coded by non-developer Paul Hutton")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.mint)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+                Text("17 May 2026")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(Color.cyan.opacity(0.88))
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color.black, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        }
     }
 }
 
@@ -2647,7 +2686,7 @@ private enum DateHelpers {
     }
 
     static func isMetricsWorkingDay(_ iso: String, excludingNWD nwd: [String]) -> Bool {
-        !isWeekend(iso) && !isBankHoliday(iso)
+        !isWeekend(iso) && !isBankHoliday(iso) && !nwd.contains(iso)
     }
 
     static func dates(from start: String, through end: String) -> [String] {
