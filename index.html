@@ -76,7 +76,7 @@
         </div>
         <button type="button" id="auth-forgot-link" class="auth-toggle muted">Forgot password?</button>
         <button type="button" id="auth-back-from-forgot" class="auth-toggle muted" hidden>Back to sign in</button>
-        <button type="button" id="auth-toggle-mode" class="auth-toggle muted">Need an account? Register</button>
+        <button type="button" id="auth-toggle-mode" class="auth-toggle muted" hidden>Need an account? Register</button>
       </div>
     </div>
 
@@ -93,7 +93,8 @@
               </svg>
             </div>
             <div class="brand-titles">
-              <h1>In-Office Attendance Tracker</h1>
+              <p class="brand-kicker">Office Attendance</p>
+              <h1 id="profile-greeting">Record</h1>
             </div>
             <div class="profile-inline">
               <div class="profile-user-meta">
@@ -109,24 +110,46 @@
         </div>
       </header>
 
+      <nav class="app-tabbar" aria-label="Primary">
+        <button type="button" class="app-tab active" data-app-tab="record" aria-current="page">
+          <span class="app-tab-icon" aria-hidden="true">●</span>
+          <span>Record</span>
+        </button>
+        <button type="button" class="app-tab" data-app-tab="month">
+          <span class="app-tab-icon" aria-hidden="true">◐</span>
+          <span>Month</span>
+        </button>
+        <button type="button" class="app-tab" data-app-tab="year">
+          <span class="app-tab-icon" aria-hidden="true">▥</span>
+          <span>Year</span>
+        </button>
+        <button type="button" class="app-tab" data-app-tab="settings">
+          <span class="app-tab-icon" aria-hidden="true">☰</span>
+          <span>Settings</span>
+        </button>
+      </nav>
+
       <main class="layout">
-        <section class="panel panel-dashboard">
+        <section class="panel panel-dashboard" data-tab-panel="record">
           <div class="panel-head">
-            <h2>Dashboard</h2>
+            <h2>Month at a glance</h2>
           </div>
           <div class="cards" id="dashboard-cards"></div>
         </section>
 
-        <section class="panel calendar-panel">
+        <section class="panel calendar-panel" data-tab-panel="record">
           <div class="calendar-header">
             <button id="prev-month" type="button">Previous</button>
             <div class="calendar-title-wrap">
+              <p id="calendar-eyebrow" class="calendar-eyebrow muted"></p>
               <h2 id="month-title"></h2>
+              <p id="month-subtitle" class="month-subtitle muted"></p>
             </div>
             <div class="calendar-year-picker">
               <label for="calendar-year-select" class="calendar-year-label muted">Year</label>
               <select id="calendar-year-select" aria-label="Jump to calendar year"></select>
             </div>
+            <button id="lock-month" type="button" aria-pressed="false">Lock</button>
             <button id="next-month" type="button">Next</button>
           </div>
           <div class="weekday-row" id="weekday-row"></div>
@@ -171,20 +194,62 @@
           </div>
         </section>
 
-        <section class="panel panel-settings">
+        <section class="panel insights-panel" id="month-insights-panel" data-tab-panel="month" hidden>
+          <div class="panel-head">
+            <h2>Month insight</h2>
+            <div class="range-toggle" role="tablist" aria-label="Month insight range">
+              <button type="button" class="range-toggle-button active" data-range-mode="recorded">User Recorded</button>
+              <button type="button" class="range-toggle-button" data-range-mode="mtd">Month-to-Date</button>
+            </div>
+          </div>
+          <div id="month-insights" class="insight-stack"></div>
+        </section>
+
+        <section class="panel insights-panel" id="year-insights-panel" data-tab-panel="year" hidden>
+          <div class="panel-head">
+            <h2>Year insight</h2>
+          </div>
+          <div id="year-insights" class="insight-stack"></div>
+        </section>
+
+        <section class="panel panel-settings" data-tab-panel="settings" hidden>
           <h2>Settings</h2>
-          <form id="settings-form">
-            <label>
-              Target %
+          <form id="settings-form" class="settings-grid">
+            <label class="settings-field settings-profile-field">
+              <span>Profile name</span>
+              <input id="profile-name-input" type="text" autocomplete="name" />
+            </label>
+
+            <label class="settings-field">
+              <span>Office target</span>
               <input id="target-input" type="number" min="0" max="100" step="0.1" />
             </label>
-            <label>
-              Annual Leave Allowance
+
+            <div class="settings-field settings-field-row">
+              <span>Recording start</span>
+              <div class="settings-inline">
+                <select id="recording-start-month" aria-label="Recording start month"></select>
+                <select id="recording-start-year" aria-label="Recording start year"></select>
+              </div>
+            </div>
+
+            <div class="settings-field settings-field-row">
+              <span>Leave year</span>
+              <select id="leave-year-select" aria-label="Leave year"></select>
+            </div>
+
+            <label class="settings-field">
+              <span>Annual leave allowance</span>
               <input id="leave-allowance-input" type="number" min="0" step="1" />
             </label>
             <button type="submit">Save settings</button>
             <p id="settings-message" class="muted"></p>
           </form>
+          <div class="settings-account">
+            <h3>Account</h3>
+            <p id="settings-account-email" class="muted"></p>
+            <button type="button" id="settings-sign-out-button" class="btn-sign-out">Sign out</button>
+          </div>
         </section>
       </main>
     </div>

@@ -36,6 +36,21 @@ const settingsMessage = document.getElementById("settings-message");
 const calendarBulkBar = document.getElementById("calendar-bulk-bar");
 const profileCreatedEl = document.getElementById("profile-created");
 const calendarYearSelect = document.getElementById("calendar-year-select");
+const profileGreeting = document.getElementById("profile-greeting");
+const monthSubtitle = document.getElementById("month-subtitle");
+const calendarEyebrow = document.getElementById("calendar-eyebrow");
+const lockMonthButton = document.getElementById("lock-month");
+const appTabs = document.querySelectorAll("[data-app-tab]");
+const tabPanels = document.querySelectorAll("[data-tab-panel]");
+const monthInsightsEl = document.getElementById("month-insights");
+const yearInsightsEl = document.getElementById("year-insights");
+const rangeModeButtons = document.querySelectorAll("[data-range-mode]");
+const profileNameInput = document.getElementById("profile-name-input");
+const recordingStartMonthSelect = document.getElementById("recording-start-month");
+const recordingStartYearSelect = document.getElementById("recording-start-year");
+const leaveYearSelect = document.getElementById("leave-year-select");
+const settingsAccountEmail = document.getElementById("settings-account-email");
+const settingsSignOutButton = document.getElementById("settings-sign-out-button");
 
 let holidaysByYear = {};
 let state = null;
@@ -51,6 +66,8 @@ let kpiPanelsPageIndex = 0;
 let appBootstrapped = false;
 let staticEventsBound = false;
 let cloudSaveTimer = null;
+let activeTab = "record";
+let monthInsightRangeMode = "recorded";
 
 async function bootstrap() {
   holidaysByYear = await loadBankHolidays();
@@ -99,6 +116,47 @@ function attachEvents() {
       clearCalendarSelection();
       bulkFeedbackMessage = "";
       renderAll();
+    });
+  }
+
+  appTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      activeTab = tab.dataset.appTab || "record";
+      syncActiveTab();
+    });
+  });
+
+  rangeModeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      monthInsightRangeMode = button.dataset.rangeMode === "mtd" ? "mtd" : "recorded";
+      syncRangeToggle();
+      renderInsights();
+    });
+  });
+
+  if (lockMonthButton) {
+    lockMonthButton.addEventListener("click", () => {
+      const profile = getActiveProfile();
+      const key = monthKey(currentView.year, currentView.month);
+      if (isBeforeRecordingStart(profile, key)) {
+        return;
+      }
+      setMonthLocked(profile, key, !isMonthLocked(profile, key));
+      clearCalendarSelection();
+      saveState();
+      renderAll();
+    });
+  }
+
+  if (leaveYearSelect) {
+    leaveYearSelect.addEventListener("change", () => {
+      renderSettings();
+    });
+  }
+
+  if (settingsSignOutButton) {
+    settingsSignOutButton.addEventListener("click", () => {
+      document.getElementById("sign-out-button")?.click();
     });
   }
 
@@ -163,8 +221,17 @@ function attachEvents() {
     const target = Number(targetInput.value);
     const allowance = Number(leaveAllowanceInput.value);
 
+    const leaveYear = Number(leaveYearSelect?.value || currentView.year);
+    const startYear = Number(recordingStartYearSelect?.value || getLondonToday().year);
+    const startMonth = Number(recordingStartMonthSelect?.value || getLondonToday().month);
+    const trimmedName = String(profileNameInput?.value || "").trim();
+
+    if (trimmedName) {
+      profile.name = trimmedName;
+    }
     profile.settings.targetPct = Number.isFinite(target) ? target : 40;
-    profile.settings.leaveAllowances[String(currentView.year)] = Number.isFinite(allowance)
+    profile.settings.recordingStartMonth = monthKey(startYear, startMonth);
+    profile.settings.leaveAllowances[String(leaveYear)] = Number.isFinite(allowance)
       ? Math.max(0, Math.floor(allowance))
       : 0;
 
@@ -178,12 +245,45 @@ function renderAll() {
   if (!state || !state.profiles?.length) {
     state = loadStateFromLocalStorage();
   }
+  syncActiveTab();
+  renderProfileHeader();
   renderProfileCreated();
   renderKpiStrip();
   renderDashboard();
   renderCalendar();
   renderCalendarBulkBar();
+  renderInsights();
   renderSettings();
+}
+
+function syncActiveTab() {
+  appTabs.forEach((tab) => {
+    const on = tab.dataset.appTab === activeTab;
+    tab.classList.toggle("active", on);
+    if (on) {
+      tab.setAttribute("aria-current", "page");
+    } else {
+      tab.removeAttribute("aria-current");
+    }
+  });
+  tabPanels.forEach((panel) => {
+    panel.hidden = panel.dataset.tabPanel !== activeTab;
+  });
+}
+
+function syncRangeToggle() {
+  rangeModeButtons.forEach((button) => {
+    const on = button.dataset.rangeMode === monthInsightRangeMode;
+    button.classList.toggle("active", on);
+    button.setAttribute("aria-selected", String(on));
+  });
+}
+
+function renderProfileHeader() {
+  const profile = getActiveProfile();
+  if (profileGreeting) {
+    profileGreeting.textContent = profile.name || "Record";
+  }
 }
 
 function clearCalendarSelection({ discardUndo = true } = {}) {
@@ -227,6 +327,13 @@ function renderCalendarBulkBar() {
     return;
   }
   const n = selectedDays.size;
+  const profile = getActiveProfile();
+  const key = monthKey(currentView.year, currentView.month);
+  if (isMonthLocked(profile, key) || isBeforeRecordingStart(profile, key)) {
+    calendarBulkBar.hidden = true;
+    calendarBulkBar.innerHTML = "";
+    return;
+  }
   const hasUndo = Array.isArray(selectionUndoBuffer) && selectionUndoBuffer.length > 0;
   const showBar = n > 0 || Boolean(bulkFeedbackMessage) || hasUndo;
   calendarBulkBar.hidden = !showBar;
@@ -326,6 +433,7 @@ function renderDashboard() {
   const metricsYear = yctx.year;
 
   const monthTracked = countTrackedWorkingDays(profile, viewedMonthRange.start, viewedMonthRange.end);
+  const monthWorkingDays = countWorkingWeekdays(profile, viewedMonthRange.start, viewedMonthRange.end);
   const monthOffice = countOfficeDays(profile, viewedMonthRange.start, viewedMonthRange.end);
   const monthWfh = countWfhDays(profile, viewedMonthRange.start, viewedMonthRange.end);
   const monthLeave = countLeaveDays(profile, viewedMonthRange.start, viewedMonthRange.end);
@@ -337,6 +445,7 @@ function renderDashboard() {
   const monthTitleLabel = `${MONTH_NAMES[viewMonth - 1]} ${viewYear}`;
 
   const yearTracked = countTrackedWorkingDays(profile, yearStart, periodEnd);
+  const yearWorkingDays = countWorkingWeekdays(profile, yearStart, periodEnd);
   const yearOffice = countOfficeDays(profile, yearStart, periodEnd);
   const yearWfh = countWfhDays(profile, yearStart, periodEnd);
   const yearLeaveInWindow = countLeaveDays(profile, yearStart, periodEnd);
@@ -357,6 +466,7 @@ function renderDashboard() {
       office: monthOffice,
       wfh: monthWfh,
       tracked: monthTracked,
+      workingDays: monthWorkingDays,
       unassigned: monthUnassigned,
       leave: monthLeave,
       sickness: monthSickness,
@@ -372,6 +482,7 @@ function renderDashboard() {
       office: yearOffice,
       wfh: yearWfh,
       tracked: yearTracked,
+      workingDays: yearWorkingDays,
       leave: yearLeaveInWindow,
       sickness: yearSickness,
       nwd: yearNwd,
@@ -381,12 +492,12 @@ function renderDashboard() {
 }
 
 function buildMonthDayListHtml(
-  { tracked, office, wfh, unassigned, leave, sickness, nwd = 0 },
+  { tracked, workingDays = tracked, office, wfh, unassigned, leave, sickness, nwd = 0 },
   rootClass = "card-month-summary",
   rowClass = "card-metric-row",
 ) {
   const rows = [
-    ["Total working days", String(tracked)],
+    ["Total working days", String(workingDays)],
     ["In office", String(office)],
     ["WFH", String(wfh)],
     ["Annual leave", String(leave)],
@@ -505,6 +616,7 @@ function buildDataCard({
   office,
   wfh,
   tracked,
+  workingDays = tracked,
   unassigned = 0,
   leave,
   sickness = 0,
@@ -524,6 +636,7 @@ function buildDataCard({
   if (variant === "month") {
     const listHtml = buildMonthDayListHtml({
       tracked,
+      workingDays,
       office,
       wfh,
       unassigned,
@@ -541,7 +654,7 @@ function buildDataCard({
   }
 
   const rowsHtml = [
-    ["Total working days", String(tracked)],
+    ["Total working days", String(workingDays)],
     ["In office", String(office)],
     ["WFH", String(wfh)],
     ["Annual leave", String(leave)],
@@ -834,8 +947,11 @@ function syncCalendarYearSelect() {
     return;
   }
   const y = currentView.year;
+  const profile = getActiveProfile();
+  const startParts = getRecordingStartParts(profile);
   const yearSet = new Set();
-  for (let yy = CALENDAR_YEAR_PICKER_MIN; yy <= CALENDAR_YEAR_PICKER_MAX; yy += 1) {
+  const minYear = Math.min(startParts.year, CALENDAR_YEAR_PICKER_MIN);
+  for (let yy = minYear; yy <= CALENDAR_YEAR_PICKER_MAX; yy += 1) {
     yearSet.add(yy);
   }
   if (y < CALENDAR_YEAR_PICKER_MIN || y > CALENDAR_YEAR_PICKER_MAX) {
@@ -850,10 +966,72 @@ function syncCalendarYearSelect() {
     .join("");
 }
 
+function populateSettingsSelects(profile) {
+  const startParts = getRecordingStartParts(profile);
+  if (recordingStartMonthSelect && recordingStartMonthSelect.children.length === 0) {
+    recordingStartMonthSelect.innerHTML = MONTH_NAMES.map(
+      (name, idx) => `<option value="${idx + 1}">${name}</option>`,
+    ).join("");
+  }
+  if (recordingStartYearSelect) {
+    const todayYear = getLondonToday().year;
+    const years = new Set([startParts.year]);
+    for (let y = Math.min(startParts.year, todayYear); y <= todayYear + 3; y += 1) {
+      years.add(y);
+    }
+    recordingStartYearSelect.innerHTML = [...years]
+      .sort((a, b) => a - b)
+      .map((y) => `<option value="${y}"${y === startParts.year ? " selected" : ""}>${y}</option>`)
+      .join("");
+  }
+  if (recordingStartMonthSelect) {
+    recordingStartMonthSelect.value = String(startParts.month);
+  }
+  if (leaveYearSelect) {
+    const currentSelected = Number(leaveYearSelect.value || currentView.year);
+    const todayYear = getLondonToday().year;
+    const configured = Object.keys(profile.settings.leaveAllowances || {})
+      .map(Number)
+      .filter(Number.isFinite);
+    const years = new Set([currentSelected, currentView.year, startParts.year, ...configured]);
+    for (let y = startParts.year; y <= todayYear + 3; y += 1) {
+      years.add(y);
+    }
+    const selected = Math.max(startParts.year, currentSelected || currentView.year);
+    leaveYearSelect.innerHTML = [...years]
+      .filter((y) => y >= startParts.year)
+      .sort((a, b) => a - b)
+      .map((y) => `<option value="${y}"${y === selected ? " selected" : ""}>${y}</option>`)
+      .join("");
+  }
+}
+
 function renderCalendar() {
   const profile = getActiveProfile();
   const { year, month } = currentView;
-  monthTitle.textContent = `${MONTH_NAMES[month - 1]} ${year}`;
+  const key = monthKey(year, month);
+  const isLocked = isMonthLocked(profile, key);
+  const beforeStart = isBeforeRecordingStart(profile, key);
+  const isEditable = !isLocked && !beforeStart;
+  monthTitle.textContent = `${MONTH_NAMES[month - 1]}`;
+  if (calendarEyebrow) {
+    calendarEyebrow.textContent = String(year);
+  }
+  if (monthSubtitle) {
+    const start = toISO(year, month, 1);
+    const end = toISO(year, month, daysInMonth(year, month));
+    const working = countWorkingWeekdays(profile, start, end);
+    const unassigned = countUnassignedWorkingDays(profile, start, end);
+    monthSubtitle.textContent = beforeStart
+      ? "Before recording start"
+      : `${working} working days · ${unassigned} unassigned`;
+  }
+  if (lockMonthButton) {
+    lockMonthButton.textContent = beforeStart ? "Locked" : isLocked ? "Unlock" : "Lock";
+    lockMonthButton.disabled = beforeStart;
+    lockMonthButton.setAttribute("aria-pressed", String(isLocked || beforeStart));
+    lockMonthButton.classList.toggle("lock-month--locked", isLocked || beforeStart);
+  }
 
   const monthStartDay = dayOfWeek(year, month, 1);
   const totalDays = daysInMonth(year, month);
@@ -879,6 +1057,9 @@ function renderCalendar() {
 
     const stateForDay = describeDay(profile, dayDate);
     button.classList.add(stateForDay.cssClass);
+    if (!isEditable || stateForDay.cssClass === "weekend" || stateForDay.cssClass === "bank-holiday") {
+      button.classList.add("day--disabled");
+    }
     if (dayDate === selectedDate) {
       button.classList.add("active");
     }
@@ -891,6 +1072,9 @@ function renderCalendar() {
       <div class="day-state">${stateForDay.label}</div>
     `;
     button.addEventListener("click", (event) => {
+      if (!isEditable || stateForDay.cssClass === "weekend" || stateForDay.cssClass === "bank-holiday") {
+        return;
+      }
       const vy = currentView.year;
       const vm = currentView.month;
       bulkFeedbackMessage = "";
@@ -919,8 +1103,199 @@ function renderCalendar() {
 
 function renderSettings() {
   const profile = getActiveProfile();
+  populateSettingsSelects(profile);
+  if (profileNameInput) {
+    profileNameInput.value = profile.name || "";
+  }
   targetInput.value = String(profile.settings.targetPct);
-  leaveAllowanceInput.value = String(getAllowance(profile, currentView.year));
+  const leaveYear = Number(leaveYearSelect?.value || currentView.year);
+  leaveAllowanceInput.value = String(getAllowance(profile, leaveYear));
+  if (settingsAccountEmail) {
+    settingsAccountEmail.textContent = window.__attendanceUser?.email || "";
+  }
+}
+
+function renderInsights() {
+  const profile = getActiveProfile();
+  syncRangeToggle();
+  if (monthInsightsEl) {
+    monthInsightsEl.innerHTML = buildMonthInsightsHtml(profile);
+  }
+  if (yearInsightsEl) {
+    yearInsightsEl.innerHTML = buildYearInsightsHtml(profile);
+  }
+}
+
+function buildMonthInsightsHtml(profile) {
+  const { year, month } = currentView;
+  const start = toISO(year, month, 1);
+  const monthEnd = toISO(year, month, daysInMonth(year, month));
+  const end = monthInsightRangeMode === "mtd" ? minISO(getLondonTodayISO(), monthEnd) : monthEnd;
+  const metrics = getMetrics(profile, start, end);
+  const fullMonthMetrics = getMetrics(profile, start, monthEnd);
+  const officeShare = toPercent(metrics.office, metrics.workingDays);
+  const target = profile.settings.targetPct;
+  const needed = officeDaysNeeded(metrics, target);
+  const title = `${MONTH_NAMES[month - 1]} ${year}`;
+  const rangeLabel = monthInsightRangeMode === "mtd" ? "Month-to-Date" : "User Recorded";
+  const status = getStatus(officeShare.value, target);
+  return `
+    ${buildInsightHeroHtml({
+      title,
+      eyebrow: rangeLabel,
+      pct: officeShare,
+      target,
+      status,
+      metrics,
+      caption: `${metrics.tracked} tracked · ${metrics.workingDays} working days`,
+    })}
+    <div class="insight-grid">
+      ${buildCompositionCardHtml("Month composition", metrics)}
+      ${buildMonthOutlookCardHtml(fullMonthMetrics, needed, target)}
+    </div>
+    ${buildWeekCardHtml(profile, year, month, end)}
+  `;
+}
+
+function buildYearInsightsHtml(profile) {
+  const { year } = currentView;
+  const startParts = getRecordingStartParts(profile);
+  const start = year === startParts.year ? toISO(startParts.year, startParts.month, 1) : toISO(year, 1, 1);
+  const end = toISO(year, 12, 31);
+  const metrics = getMetrics(profile, start, end);
+  const leave = getLeaveBreakdown(profile, year);
+  const officeShare = toPercent(metrics.office, metrics.workingDays);
+  const status = getStatus(officeShare.value, profile.settings.targetPct);
+  return `
+    ${buildInsightHeroHtml({
+      title: String(year),
+      eyebrow: "Year insight",
+      pct: officeShare,
+      target: profile.settings.targetPct,
+      status,
+      metrics,
+      caption: `${metrics.tracked} tracked · ${metrics.workingDays} working days`,
+    })}
+    <div class="insight-grid">
+      ${buildCompositionCardHtml("Year composition", metrics)}
+      ${buildLeaveInsightCardHtml(leave)}
+    </div>
+    ${buildQuarterCardHtml(profile, year)}
+  `;
+}
+
+function buildInsightHeroHtml({ title, eyebrow, pct, target, status, metrics, caption }) {
+  const share = pct.value == null ? 0 : Math.max(0, Math.min(100, pct.value));
+  return `<article class="insight-hero">
+    <div class="insight-hero-copy">
+      <span class="insight-eyebrow">${eyebrow}</span>
+      <h3>${title}</h3>
+      <p class="muted">${caption}</p>
+      <span class="status ${status.className}">${status.label}</span>
+    </div>
+    <div class="insight-ring" style="--share:${share * 3.6}deg">
+      <div class="insight-ring-hole">
+        <strong>${pct.label}</strong>
+        <span>office · target ${target.toFixed(1)}%</span>
+      </div>
+    </div>
+    <div class="insight-quickstats">
+      ${buildMiniStat("Office", metrics.office, "office")}
+      ${buildMiniStat("WFH", metrics.wfh, "wfh")}
+      ${buildMiniStat("Leave", metrics.leave, "leave")}
+      ${buildMiniStat("Sick", metrics.sickness, "sickness")}
+    </div>
+  </article>`;
+}
+
+function buildMiniStat(label, value, kind) {
+  return `<div class="mini-stat mini-stat--${kind}"><span>${value}</span><strong>${label}</strong></div>`;
+}
+
+function buildCompositionCardHtml(title, metrics) {
+  const total = Math.max(metrics.workingDays, 1);
+  const barSegments = [
+    ["office", metrics.office],
+    ["wfh", metrics.wfh],
+    ["sickness", metrics.sickness],
+    ["unassigned", metrics.unassigned],
+  ];
+  const statSegments = [
+    ["office", metrics.office],
+    ["wfh", metrics.wfh],
+    ["leave", metrics.leave],
+    ["sickness", metrics.sickness],
+    ["nwd", metrics.nwd],
+    ["unassigned", metrics.unassigned],
+  ];
+  return `<article class="insight-card">
+    <h3>${title}</h3>
+    <div class="composition-track">
+      ${barSegments.map(([kind, value]) => `<span class="composition-seg composition-seg--${kind}" style="width:${(value / total) * 100}%"></span>`).join("")}
+    </div>
+    <div class="insight-stat-grid">
+      ${statSegments.map(([kind, value]) => `<div><strong>${value}</strong><span>${kind === "nwd" ? "NWD" : kind}</span></div>`).join("")}
+    </div>
+  </article>`;
+}
+
+function buildMonthOutlookCardHtml(metrics, needed, target) {
+  return `<article class="insight-card">
+    <h3>Month target</h3>
+    <p class="insight-large">${needed}</p>
+    <p class="muted">${needed === 1 ? "more office day" : "more office days"} needed to reach ${target.toFixed(1)}% for the full month.</p>
+    <div class="card-metric-row"><strong>Working days</strong><span>${metrics.workingDays}</span></div>
+    <div class="card-metric-row"><strong>Unassigned</strong><span>${metrics.unassigned}</span></div>
+  </article>`;
+}
+
+function buildLeaveInsightCardHtml(leave) {
+  return `<article class="insight-card">
+    <h3>Annual leave</h3>
+    <p class="insight-large">${leave.remaining}</p>
+    <p class="muted">days remaining from a ${leave.allowance} day allowance.</p>
+    <div class="card-metric-row"><strong>Taken</strong><span>${leave.taken}</span></div>
+    <div class="card-metric-row"><strong>Booked ahead</strong><span>${leave.booked}</span></div>
+  </article>`;
+}
+
+function buildWeekCardHtml(profile, year, month, cutoffISO) {
+  const rows = [];
+  let week = [];
+  for (const iso of listDates(toISO(year, month, 1), toISO(year, month, daysInMonth(year, month)))) {
+    if (cutoffISO && iso > cutoffISO) {
+      continue;
+    }
+    week.push(iso);
+    if (isoToWeekday(iso) === 7 || iso.endsWith(`-${String(daysInMonth(year, month)).padStart(2, "0")}`)) {
+      rows.push(week);
+      week = [];
+    }
+  }
+  return `<article class="insight-card insight-card--wide">
+    <h3>Week by week</h3>
+    <div class="week-list">
+      ${rows.map((dates, idx) => {
+        const metrics = getMetrics(profile, dates[0], dates[dates.length - 1]);
+        const share = toPercent(metrics.office, metrics.workingDays);
+        return `<div class="week-row"><strong>Week ${idx + 1}</strong><span>${share.label}</span><small>${metrics.office} office · ${metrics.wfh} WFH · ${metrics.unassigned} open</small></div>`;
+      }).join("")}
+    </div>
+  </article>`;
+}
+
+function buildQuarterCardHtml(profile, year) {
+  return `<article class="insight-card insight-card--wide">
+    <h3>Quarter scoreboard</h3>
+    <div class="quarter-grid">
+      ${[1, 2, 3, 4].map((q) => {
+        const startMonth = (q - 1) * 3 + 1;
+        const metrics = getMetrics(profile, toISO(year, startMonth, 1), toISO(year, startMonth + 2, daysInMonth(year, startMonth + 2)));
+        const share = toPercent(metrics.office, metrics.workingDays);
+        return `<div class="quarter-tile"><span>Q${q}</span><strong>${share.label}</strong><small>${metrics.tracked} tracked</small></div>`;
+      }).join("")}
+    </div>
+  </article>`;
 }
 
 function isPermanentWeekendIso(isoDate) {
@@ -1013,6 +1388,9 @@ function isWeekdayMonFriIso(isoDate) {
 }
 
 function countsAsMetricsWorkingDay(profile, isoDate) {
+  if (isoDate < recordingStartISO(profile)) {
+    return false;
+  }
   if (isPermanentWeekendIso(isoDate) || !isWeekdayMonFriIso(isoDate)) {
     return false;
   }
@@ -1027,6 +1405,10 @@ function countsAsMetricsWorkingDay(profile, isoDate) {
 
 /** Mon–Fri slot where office / WFH / leave / sickness may be set. Ignores NWD so a marked NWD can be changed to another type. Weekends and bank holidays still block. */
 function isCalendarWeekdayAssignable(profile, isoDate) {
+  const key = isoDate.slice(0, 7);
+  if (isBeforeRecordingStart(profile, key) || isMonthLocked(profile, key)) {
+    return false;
+  }
   if (isPermanentWeekendIso(isoDate) || !isWeekdayMonFriIso(isoDate)) {
     return false;
   }
@@ -1088,6 +1470,17 @@ function parseStateFromJSON(parsed) {
         wfhMarks: Array.isArray(profile.wfhMarks) ? profile.wfhMarks : [],
         sicknessMarks: Array.isArray(profile.sicknessMarks) ? profile.sicknessMarks : [],
         nwdMarks: Array.isArray(profile.nwdMarks) ? profile.nwdMarks : [],
+        lockedMonths: Array.isArray(profile.lockedMonths) ? profile.lockedMonths : [],
+        settings: {
+          ...(profile.settings || {}),
+          targetPct: Number(profile.settings?.targetPct ?? 40),
+          leaveAllowances: profile.settings?.leaveAllowances || {},
+          recordingStartMonth:
+            validMonthKey(profile.settings?.recordingStartMonth) ||
+            earliestMarkedMonthKey(profile) ||
+            monthKeyFromISO(profile.createdAtISO) ||
+            monthKey(getLondonToday().year, getLondonToday().month),
+        },
       };
       delete merged.clearedDefaultWfh;
       normalizeProfileMarks(merged);
@@ -1260,6 +1653,15 @@ function normalizeProfileMarks(profile) {
   profile.wfhMarks = dedupeSortedDates(profile.wfhMarks || []);
   profile.sicknessMarks = dedupeSortedDates(profile.sicknessMarks || []);
   profile.nwdMarks = dedupeSortedDates(profile.nwdMarks || []);
+  profile.lockedMonths = dedupeSortedDates(profile.lockedMonths || []);
+  profile.settings = profile.settings || {};
+  profile.settings.leaveAllowances = profile.settings.leaveAllowances || {};
+  profile.settings.targetPct = Number(profile.settings.targetPct ?? 40);
+  profile.settings.recordingStartMonth =
+    validMonthKey(profile.settings.recordingStartMonth) ||
+    earliestMarkedMonthKey(profile) ||
+    monthKeyFromISO(profile.createdAtISO) ||
+    monthKey(getLondonToday().year, getLondonToday().month);
   if (profile.settings && "workingWeek" in profile.settings) {
     delete profile.settings.workingWeek;
   }
@@ -1278,12 +1680,14 @@ function createDefaultProfile(name) {
     settings: {
       targetPct: 40,
       leaveAllowances: { [String(getLondonToday().year)]: 25 },
+      recordingStartMonth: monthKey(getLondonToday().year, getLondonToday().month),
     },
     officeMarks: [],
     leaveMarks: [],
     wfhMarks: [],
     sicknessMarks: [],
     nwdMarks: [],
+    lockedMonths: [],
   };
 }
 
@@ -1295,7 +1699,11 @@ function getActiveProfile() {
 }
 
 function getAllowance(profile, year) {
-  return Number(profile.settings.leaveAllowances[String(year)] || 0);
+  return Number(
+    profile.settings.leaveAllowances[String(year)] ??
+      profile.settings.leaveAllowances[String(getLondonToday().year)] ??
+      25,
+  );
 }
 
 function toggleDate(arr, value) {
@@ -1327,6 +1735,13 @@ function applyDayType(profile, isoDate, nextType) {
   if (!nextType) {
     return { ok: false, message: "" };
   }
+  const key = isoDate.slice(0, 7);
+  if (isBeforeRecordingStart(profile, key)) {
+    return { ok: false, message: "This month is before your recording start date." };
+  }
+  if (isMonthLocked(profile, key)) {
+    return { ok: false, message: "This month is locked. Unlock it before editing." };
+  }
 
   const backup = {
     officeMarks: [...profile.officeMarks],
@@ -1353,8 +1768,8 @@ function applyDayType(profile, isoDate, nextType) {
   }
 
   if (nextType === "nwd") {
-    if (isPermanentWeekendIso(isoDate)) {
-      return { ok: false, message: "Cannot mark NWD on Saturday or Sunday." };
+    if (isPermanentWeekendIso(isoDate) || isWeekdayBankHoliday(profile, isoDate)) {
+      return { ok: false, message: "NWD can only be set on a weekday." };
     }
     clearAttendanceMarks(profile, isoDate);
     if (!profile.nwdMarks.includes(isoDate)) {
@@ -1457,6 +1872,74 @@ function toISO(year, month, day) {
   return `${year}-${m}-${d}`;
 }
 
+function monthKey(year, month) {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function validMonthKey(value) {
+  const raw = String(value || "");
+  const match = /^(\d{4})-(\d{2})$/.exec(raw);
+  if (!match) {
+    return "";
+  }
+  const month = Number(match[2]);
+  return month >= 1 && month <= 12 ? raw : "";
+}
+
+function monthKeyFromISO(isoDate) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(isoDate || "")) ? isoDate.slice(0, 7) : "";
+}
+
+function earliestMarkedMonthKey(profile) {
+  return [
+    ...(profile.officeMarks || []),
+    ...(profile.leaveMarks || []),
+    ...(profile.wfhMarks || []),
+    ...(profile.sicknessMarks || []),
+    ...(profile.nwdMarks || []),
+  ]
+    .map(monthKeyFromISO)
+    .filter(Boolean)
+    .sort()[0] || "";
+}
+
+function getRecordingStartMonthKey(profile) {
+  return (
+    validMonthKey(profile?.settings?.recordingStartMonth) ||
+    earliestMarkedMonthKey(profile || {}) ||
+    monthKeyFromISO(profile?.createdAtISO) ||
+    monthKey(getLondonToday().year, getLondonToday().month)
+  );
+}
+
+function getRecordingStartParts(profile) {
+  const [year, month] = getRecordingStartMonthKey(profile).split("-").map(Number);
+  return { year, month };
+}
+
+function recordingStartISO(profile) {
+  const parts = getRecordingStartParts(profile);
+  return toISO(parts.year, parts.month, 1);
+}
+
+function isBeforeRecordingStart(profile, key) {
+  return key < getRecordingStartMonthKey(profile);
+}
+
+function isMonthLocked(profile, key) {
+  return (profile.lockedMonths || []).includes(key);
+}
+
+function setMonthLocked(profile, key, locked) {
+  const months = new Set(profile.lockedMonths || []);
+  if (locked) {
+    months.add(key);
+  } else {
+    months.delete(key);
+  }
+  profile.lockedMonths = [...months].sort();
+}
+
 function minISO(a, b) {
   return a <= b ? a : b;
 }
@@ -1490,7 +1973,7 @@ function ensureProfileCreatedAt(profile) {
 function countWorkingWeekdays(profile, startISO, endISO) {
   let n = 0;
   for (const iso of listDates(startISO, endISO)) {
-    if (countsAsMetricsWorkingDay(profile, iso)) {
+    if (countsAsMetricsWorkingDay(profile, iso) && !profile.leaveMarks.includes(iso)) {
       n += 1;
     }
   }
@@ -1514,6 +1997,63 @@ function countUnassignedWorkingDays(profile, startISO, endISO) {
     n += 1;
   }
   return n;
+}
+
+function getMetrics(profile, startISO, endISO) {
+  const metrics = {
+    workingDays: 0,
+    office: 0,
+    wfh: 0,
+    leave: 0,
+    sickness: 0,
+    nwd: 0,
+    unassigned: 0,
+    tracked: 0,
+  };
+  for (const iso of listDates(maxISO(startISO, recordingStartISO(profile)), endISO)) {
+    const working = countsAsMetricsWorkingDay(profile, iso);
+    if (profile.officeMarks.includes(iso) && working) {
+      metrics.workingDays += 1;
+      metrics.office += 1;
+      metrics.tracked += 1;
+    } else if (profile.wfhMarks.includes(iso) && working) {
+      metrics.workingDays += 1;
+      metrics.wfh += 1;
+      metrics.tracked += 1;
+    } else if (profile.leaveMarks.includes(iso) && working) {
+      metrics.leave += 1;
+    } else if (profile.sicknessMarks.includes(iso) && working) {
+      metrics.workingDays += 1;
+      metrics.sickness += 1;
+    } else if (profile.nwdMarks.includes(iso)) {
+      metrics.nwd += 1;
+    } else if (working) {
+      metrics.workingDays += 1;
+      metrics.unassigned += 1;
+    }
+  }
+  return metrics;
+}
+
+function officeDaysNeeded(metrics, target) {
+  if (!Number.isFinite(target) || target <= 0 || target >= 100 || metrics.workingDays <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.ceil((target / 100) * metrics.workingDays - metrics.office));
+}
+
+function getLeaveBreakdown(profile, year) {
+  const today = getLondonTodayISO();
+  const marks = (profile.leaveMarks || []).filter((d) => d.startsWith(`${year}-`));
+  const taken = marks.filter((d) => d <= today).length;
+  const booked = marks.length - taken;
+  const allowance = getAllowance(profile, year);
+  return {
+    taken,
+    booked,
+    allowance,
+    remaining: allowance - taken - booked,
+  };
 }
 
 function isoToWeekday(isoDate) {

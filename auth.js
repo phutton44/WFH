@@ -296,7 +296,7 @@
         authBackFromForgot.hidden = true;
       }
       if (authToggle) {
-        authToggle.hidden = false;
+        authToggle.hidden = true;
       }
       if (authPassword) {
         authPassword.required = true;
@@ -330,8 +330,7 @@
         authModeLabel.textContent = mode === "signin" ? "Sign in" : "Create account";
       }
       if (authToggle) {
-        authToggle.textContent =
-          mode === "signin" ? "Need an account? Register" : "Already have an account? Sign in";
+        authToggle.textContent = "";
       }
       if (authSubmit) {
         authSubmit.textContent = mode === "signin" ? "Sign in" : "Create account";
@@ -515,7 +514,7 @@
           }
           if (status === 401) {
             throw new Error(
-              "Wrong email or password — or this database is new and that account was never created here. Try Register if unsure.",
+              "Wrong email or password. New accounts must continue with Google or Apple ID.",
             );
           }
           throw new Error(data?.error || "Sign-in failed.");
@@ -659,12 +658,7 @@
   async function init() {
     setMode("signin");
     if (authToggle) {
-      authToggle.addEventListener("click", () => {
-        if (mode === "forgot") {
-          return;
-        }
-        setMode(mode === "signin" ? "signup" : "signin");
-      });
+      authToggle.hidden = true;
     }
     if (authForgotLink) {
       authForgotLink.addEventListener("click", () => {

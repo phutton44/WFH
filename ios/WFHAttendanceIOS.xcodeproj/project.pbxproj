@@ -10,6 +10,39 @@
 		1A2B3C4D5E6F700000000101 /* WFHAttendanceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000201 /* WFHAttendanceApp.swift */; };
 		1A2B3C4D5E6F700000000102 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000202 /* ContentView.swift */; };
 		1A2B3C4D5E6F700000000103 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000205 /* Assets.xcassets */; };
+		900000000000000000000101 /* Overlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = 900000000000000000000201 /* Overlays.swift */; };
+		900000000000000000000102 /* AttendanceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 900000000000000000000202 /* AttendanceModels.swift */; };
+		900000000000000000000103 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 900000000000000000000203 /* APIClient.swift */; };
+		900000000000000000000104 /* AttendanceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 900000000000000000000204 /* AttendanceStore.swift */; };
+		900000000000000000000105 /* GoogleOAuthCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 900000000000000000000205 /* GoogleOAuthCoordinator.swift */; };
+		900000000000000000000106 /* AppExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 900000000000000000000206 /* AppExtensions.swift */; };
+		900000000000000000000107 /* DateHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 900000000000000000000207 /* DateHelpers.swift */; };
+		900000000000000000000108 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 900000000000000000000208 /* AuthView.swift */; };
+		900000000000000000000109 /* AttendanceHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 900000000000000000000209 /* AttendanceHomeView.swift */; };
+		90000000000000000000010A /* KPIScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90000000000000000000020A /* KPIScreen.swift */; };
+		90000000000000000000010B /* CalendarScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90000000000000000000020B /* CalendarScreen.swift */; };
+		90000000000000000000010C /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90000000000000000000020C /* SettingsScreen.swift */; };
+		910000000000000000000101 /* MonthNavButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000201 /* MonthNavButton.swift */; };
+		910000000000000000000102 /* CompositionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000202 /* CompositionBar.swift */; };
+		910000000000000000000103 /* WidgetTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000203 /* WidgetTitle.swift */; };
+		910000000000000000000104 /* DayTypeInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000204 /* DayTypeInfo.swift */; };
+		910000000000000000000105 /* DayTypeLegendRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000205 /* DayTypeLegendRow.swift */; };
+		910000000000000000000106 /* DayTypeDescriptionTile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000206 /* DayTypeDescriptionTile.swift */; };
+		910000000000000000000107 /* DaysExplainedSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000207 /* DaysExplainedSheet.swift */; };
+		910000000000000000000108 /* MonthHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000208 /* MonthHeader.swift */; };
+		910000000000000000000109 /* MonthTargetCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000209 /* MonthTargetCard.swift */; };
+		91000000000000000000010A /* MonthCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91000000000000000000020A /* MonthCard.swift */; };
+		91000000000000000000010B /* MonthGlanceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91000000000000000000020B /* MonthGlanceCard.swift */; };
+		91000000000000000000010C /* SelectionActionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91000000000000000000020C /* SelectionActionSheet.swift */; };
+		91000000000000000000010D /* InsightsMonthHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91000000000000000000020D /* InsightsMonthHeader.swift */; };
+		91000000000000000000010E /* InsightDonutHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91000000000000000000020E /* InsightDonutHero.swift */; };
+		91000000000000000000010F /* WeekByWeekCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91000000000000000000020F /* WeekByWeekCard.swift */; };
+		910000000000000000000110 /* MonthDetailsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000210 /* MonthDetailsCard.swift */; };
+		910000000000000000000111 /* QuarterScoreboardCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000211 /* QuarterScoreboardCard.swift */; };
+		910000000000000000000112 /* YearCompositionLeaveCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000212 /* YearCompositionLeaveCard.swift */; };
+		910000000000000000000113 /* LeaveInfographicCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000213 /* LeaveInfographicCard.swift */; };
+		910000000000000000000114 /* YearReportPDF.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000214 /* YearReportPDF.swift */; };
+		920000000000000000000101 /* WorkingDayNotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 920000000000000000000201 /* WorkingDayNotificationScheduler.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -19,6 +52,39 @@
 		1A2B3C4D5E6F700000000204 /* WFHAttendanceIOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WFHAttendanceIOS.entitlements; sourceTree = "<group>"; };
 		1A2B3C4D5E6F700000000205 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1A2B3C4D5E6F700000000301 /* WFH Attendance.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "WFH Attendance.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		900000000000000000000201 /* Overlays.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Overlays.swift; sourceTree = "<group>"; };
+		900000000000000000000202 /* AttendanceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceModels.swift; sourceTree = "<group>"; };
+		900000000000000000000203 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		900000000000000000000204 /* AttendanceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceStore.swift; sourceTree = "<group>"; };
+		900000000000000000000205 /* GoogleOAuthCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleOAuthCoordinator.swift; sourceTree = "<group>"; };
+		900000000000000000000206 /* AppExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppExtensions.swift; sourceTree = "<group>"; };
+		900000000000000000000207 /* DateHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateHelpers.swift; sourceTree = "<group>"; };
+		900000000000000000000208 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		900000000000000000000209 /* AttendanceHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceHomeView.swift; sourceTree = "<group>"; };
+		90000000000000000000020A /* KPIScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KPIScreen.swift; sourceTree = "<group>"; };
+		90000000000000000000020B /* CalendarScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarScreen.swift; sourceTree = "<group>"; };
+		90000000000000000000020C /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
+		910000000000000000000201 /* MonthNavButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthNavButton.swift; sourceTree = "<group>"; };
+		910000000000000000000202 /* CompositionBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompositionBar.swift; sourceTree = "<group>"; };
+		910000000000000000000203 /* WidgetTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetTitle.swift; sourceTree = "<group>"; };
+		910000000000000000000204 /* DayTypeInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayTypeInfo.swift; sourceTree = "<group>"; };
+		910000000000000000000205 /* DayTypeLegendRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayTypeLegendRow.swift; sourceTree = "<group>"; };
+		910000000000000000000206 /* DayTypeDescriptionTile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayTypeDescriptionTile.swift; sourceTree = "<group>"; };
+		910000000000000000000207 /* DaysExplainedSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaysExplainedSheet.swift; sourceTree = "<group>"; };
+		910000000000000000000208 /* MonthHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthHeader.swift; sourceTree = "<group>"; };
+		910000000000000000000209 /* MonthTargetCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthTargetCard.swift; sourceTree = "<group>"; };
+		91000000000000000000020A /* MonthCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthCard.swift; sourceTree = "<group>"; };
+		91000000000000000000020B /* MonthGlanceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthGlanceCard.swift; sourceTree = "<group>"; };
+		91000000000000000000020C /* SelectionActionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionActionSheet.swift; sourceTree = "<group>"; };
+		91000000000000000000020D /* InsightsMonthHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsMonthHeader.swift; sourceTree = "<group>"; };
+		91000000000000000000020E /* InsightDonutHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightDonutHero.swift; sourceTree = "<group>"; };
+		91000000000000000000020F /* WeekByWeekCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekByWeekCard.swift; sourceTree = "<group>"; };
+		910000000000000000000210 /* MonthDetailsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthDetailsCard.swift; sourceTree = "<group>"; };
+		910000000000000000000211 /* QuarterScoreboardCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuarterScoreboardCard.swift; sourceTree = "<group>"; };
+		910000000000000000000212 /* YearCompositionLeaveCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YearCompositionLeaveCard.swift; sourceTree = "<group>"; };
+		910000000000000000000213 /* LeaveInfographicCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaveInfographicCard.swift; sourceTree = "<group>"; };
+		910000000000000000000214 /* YearReportPDF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YearReportPDF.swift; sourceTree = "<group>"; };
+		920000000000000000000201 /* WorkingDayNotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkingDayNotificationScheduler.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -45,6 +111,11 @@
 			children = (
 				1A2B3C4D5E6F700000000201 /* WFHAttendanceApp.swift */,
 				1A2B3C4D5E6F700000000202 /* ContentView.swift */,
+				900000000000000000000301 /* Components */,
+				900000000000000000000302 /* Models */,
+				900000000000000000000303 /* Services */,
+				900000000000000000000304 /* Support */,
+				900000000000000000000305 /* Views */,
 				1A2B3C4D5E6F700000000203 /* Info.plist */,
 				1A2B3C4D5E6F700000000204 /* WFHAttendanceIOS.entitlements */,
 				1A2B3C4D5E6F700000000205 /* Assets.xcassets */,
@@ -58,6 +129,146 @@
 				1A2B3C4D5E6F700000000301 /* WFH Attendance.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		900000000000000000000301 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				910000000000000000000301 /* Controls */,
+				910000000000000000000302 /* Charts */,
+				910000000000000000000303 /* Typography */,
+				910000000000000000000304 /* DayTypes */,
+				900000000000000000000201 /* Overlays.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		900000000000000000000302 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				900000000000000000000202 /* AttendanceModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		900000000000000000000303 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				900000000000000000000203 /* APIClient.swift */,
+				900000000000000000000204 /* AttendanceStore.swift */,
+				900000000000000000000205 /* GoogleOAuthCoordinator.swift */,
+				920000000000000000000201 /* WorkingDayNotificationScheduler.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		900000000000000000000304 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				900000000000000000000206 /* AppExtensions.swift */,
+				900000000000000000000207 /* DateHelpers.swift */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		900000000000000000000305 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				900000000000000000000306 /* Auth */,
+				900000000000000000000307 /* Home */,
+				900000000000000000000308 /* Insights */,
+				900000000000000000000309 /* Record */,
+				90000000000000000000030A /* Settings */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		900000000000000000000306 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				900000000000000000000208 /* AuthView.swift */,
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		900000000000000000000307 /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				900000000000000000000209 /* AttendanceHomeView.swift */,
+			);
+			path = Home;
+			sourceTree = "<group>";
+		};
+		900000000000000000000308 /* Insights */ = {
+			isa = PBXGroup;
+			children = (
+				90000000000000000000020A /* KPIScreen.swift */,
+				91000000000000000000020D /* InsightsMonthHeader.swift */,
+				91000000000000000000020E /* InsightDonutHero.swift */,
+				91000000000000000000020F /* WeekByWeekCard.swift */,
+				910000000000000000000210 /* MonthDetailsCard.swift */,
+				910000000000000000000211 /* QuarterScoreboardCard.swift */,
+				910000000000000000000212 /* YearCompositionLeaveCard.swift */,
+				910000000000000000000213 /* LeaveInfographicCard.swift */,
+				910000000000000000000214 /* YearReportPDF.swift */,
+			);
+			path = Insights;
+			sourceTree = "<group>";
+		};
+		900000000000000000000309 /* Record */ = {
+			isa = PBXGroup;
+			children = (
+				90000000000000000000020B /* CalendarScreen.swift */,
+				910000000000000000000208 /* MonthHeader.swift */,
+				910000000000000000000209 /* MonthTargetCard.swift */,
+				91000000000000000000020A /* MonthCard.swift */,
+				91000000000000000000020B /* MonthGlanceCard.swift */,
+				91000000000000000000020C /* SelectionActionSheet.swift */,
+			);
+			path = Record;
+			sourceTree = "<group>";
+		};
+		90000000000000000000030A /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				90000000000000000000020C /* SettingsScreen.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		910000000000000000000301 /* Controls */ = {
+			isa = PBXGroup;
+			children = (
+				910000000000000000000201 /* MonthNavButton.swift */,
+			);
+			path = Controls;
+			sourceTree = "<group>";
+		};
+		910000000000000000000302 /* Charts */ = {
+			isa = PBXGroup;
+			children = (
+				910000000000000000000202 /* CompositionBar.swift */,
+			);
+			path = Charts;
+			sourceTree = "<group>";
+		};
+		910000000000000000000303 /* Typography */ = {
+			isa = PBXGroup;
+			children = (
+				910000000000000000000203 /* WidgetTitle.swift */,
+			);
+			path = Typography;
+			sourceTree = "<group>";
+		};
+		910000000000000000000304 /* DayTypes */ = {
+			isa = PBXGroup;
+			children = (
+				910000000000000000000204 /* DayTypeInfo.swift */,
+				910000000000000000000205 /* DayTypeLegendRow.swift */,
+				910000000000000000000206 /* DayTypeDescriptionTile.swift */,
+				910000000000000000000207 /* DaysExplainedSheet.swift */,
+			);
+			path = DayTypes;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -132,6 +343,39 @@
 			files = (
 				1A2B3C4D5E6F700000000101 /* WFHAttendanceApp.swift in Sources */,
 				1A2B3C4D5E6F700000000102 /* ContentView.swift in Sources */,
+				900000000000000000000101 /* Overlays.swift in Sources */,
+				900000000000000000000102 /* AttendanceModels.swift in Sources */,
+				900000000000000000000103 /* APIClient.swift in Sources */,
+				900000000000000000000104 /* AttendanceStore.swift in Sources */,
+				900000000000000000000105 /* GoogleOAuthCoordinator.swift in Sources */,
+				920000000000000000000101 /* WorkingDayNotificationScheduler.swift in Sources */,
+				900000000000000000000106 /* AppExtensions.swift in Sources */,
+				900000000000000000000107 /* DateHelpers.swift in Sources */,
+				900000000000000000000108 /* AuthView.swift in Sources */,
+				900000000000000000000109 /* AttendanceHomeView.swift in Sources */,
+				90000000000000000000010A /* KPIScreen.swift in Sources */,
+				90000000000000000000010B /* CalendarScreen.swift in Sources */,
+				90000000000000000000010C /* SettingsScreen.swift in Sources */,
+				910000000000000000000101 /* MonthNavButton.swift in Sources */,
+				910000000000000000000102 /* CompositionBar.swift in Sources */,
+				910000000000000000000103 /* WidgetTitle.swift in Sources */,
+				910000000000000000000104 /* DayTypeInfo.swift in Sources */,
+				910000000000000000000105 /* DayTypeLegendRow.swift in Sources */,
+				910000000000000000000106 /* DayTypeDescriptionTile.swift in Sources */,
+				910000000000000000000107 /* DaysExplainedSheet.swift in Sources */,
+				910000000000000000000108 /* MonthHeader.swift in Sources */,
+				910000000000000000000109 /* MonthTargetCard.swift in Sources */,
+				91000000000000000000010A /* MonthCard.swift in Sources */,
+				91000000000000000000010B /* MonthGlanceCard.swift in Sources */,
+				91000000000000000000010C /* SelectionActionSheet.swift in Sources */,
+				91000000000000000000010D /* InsightsMonthHeader.swift in Sources */,
+				91000000000000000000010E /* InsightDonutHero.swift in Sources */,
+				91000000000000000000010F /* WeekByWeekCard.swift in Sources */,
+				910000000000000000000110 /* MonthDetailsCard.swift in Sources */,
+				910000000000000000000111 /* QuarterScoreboardCard.swift in Sources */,
+				910000000000000000000112 /* YearCompositionLeaveCard.swift in Sources */,
+				910000000000000000000113 /* LeaveInfographicCard.swift in Sources */,
+				910000000000000000000114 /* YearReportPDF.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -260,12 +504,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = WFHAttendanceIOS/WFHAttendanceIOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 9QYJ3WY899;
-				ENABLE_APPLE_SIGN_IN = NO;
+				ENABLE_APPLE_SIGN_IN = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				GOOGLE_IOS_CALLBACK_SCHEME = "com.googleusercontent.apps.473401354399-4hh33qrhfgdvu419n1tjrvtjm7o4oak6";
@@ -289,12 +534,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = WFHAttendanceIOS/WFHAttendanceIOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 9QYJ3WY899;
-				ENABLE_APPLE_SIGN_IN = NO;
+				ENABLE_APPLE_SIGN_IN = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				GOOGLE_IOS_CALLBACK_SCHEME = "com.googleusercontent.apps.473401354399-4hh33qrhfgdvu419n1tjrvtjm7o4oak6";

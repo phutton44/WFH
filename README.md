@@ -85,28 +85,24 @@ For a normal deployment, leave it unset so `apiBase` is `""` and the app calls `
 
 You can also copy **`config.example.js`** to **`config.js`** and set `apiBase` by hand for local experiments.
 
-## 5. macOS desktop app (Electron)
+## 5. macOS desktop app (native SwiftUI)
 
-The macOS app reuses the same static frontend files and points them at the hosted Vercel API by default.
+The macOS app lives in **`macos/`**. It is a native SwiftUI app and talks to the same hosted Vercel API as the iOS app.
 
 ```bash
-npm install
-npm run electron:dev    # run the desktop app locally
-npm run mac:dir         # build dist/mac-arm64/WFH Attendance.app
-npm run mac:package     # build DMG + ZIP installers
+cd macos
+swift build
 ```
 
-By default, desktop builds set **`WFH_PUBLIC_API_BASE=https://wfh-one.vercel.app`** before writing `config.js`. Override that if you want the desktop app to use another API:
+You can also run the bundling helper from the repo root:
 
 ```bash
-WFH_PUBLIC_API_BASE=https://your-app.vercel.app npm run mac:package
+script/build_and_run.sh
 ```
 
 ## 6. iOS app (Swift)
 
-The iOS project lives at **`ios/WFHAttendanceIOS.xcodeproj`**. It is a native dark-mode SwiftUI app that talks to the same Vercel/Neon backend as the web app. It supports Google sign-in, synced attendance state, separate Calendar / Insights / Settings tabs, a native month planner with multi-select, day-type actions, and compact month/year insights.
-
-Apple sign-in is intentionally disabled for the current free Xcode Personal Team setup, because Apple does not allow the Sign in with Apple capability on Personal Teams. The backend route is still present for a future paid Apple Developer account.
+The iOS project lives at **`ios/WFHAttendanceIOS.xcodeproj`**. It is a native dark-mode SwiftUI app that talks to the same Vercel/Neon backend as the web app. It supports Apple ID and Google sign-in, synced attendance state, separate Calendar / Insights / Settings tabs, a native month planner with multi-select, day-type actions, and compact month/year insights.
 
 To test it:
 
@@ -115,7 +111,7 @@ To test it:
 3. Pick an iPhone simulator.
 4. Press **Run**.
 
-Current bundle id: **`com.paulhutton.wfhattendance.ios`**. Current display name: **`CUPA Attendence`**.
+Current bundle id: **`com.paulhutton.wfhattendance.ios`**. Current display name: **`Paul Attendance`**.
 
 ## 7. Security notes
 

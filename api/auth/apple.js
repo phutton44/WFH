@@ -6,39 +6,23 @@ const { getPool, signToken, methodNotAllowed, parseJsonBody, normalizeEmail, ens
 let appleKeys;
 let appleKeysExpiresAt = 0;
 
-function getAppleAudience() {
-  return String(
-    process.env.APPLE_CLIENT_ID
-      || process.env.WFH_APPLE_CLIENT_ID
-      || process.env.APPLE_BUNDLE_ID
-      || "com.paulhutton.wfhattendance.ios",
-  ).trim();
+function uniqueTruthy(values) {
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)));
+}
+
+function getAppleAudiences() {
+  return uniqueTruthy([
+    process.env.APPLE_CLIENT_ID,
+    process.env.WFH_APPLE_CLIENT_ID,
+    process.env.APPLE_BUNDLE_ID,
+    process.env.APPLE_IOS_BUNDLE_ID,
+    process.env.WFH_APPLE_IOS_BUNDLE_ID,
+    "com.paulhutton.wfhattendance.ios",
+  ]);
 }
 
 function decodeBase64UrlJson(part) {
   return JSON.parse(Buffer.from(String(part), "base64url").toString("utf8"));
-}
-
-function rawEcdsaToDer(signature) {
-  const size = signature.length / 2;
-  const r = signature.subarray(0, size);
-  const s = signature.subarray(size);
-  const trim = (bytes) => {
-    let i = 0;
-    while (i < bytes.length - 1 && bytes[i] === 0) i += 1;
-    let out = bytes.subarray(i);
-    if (out[0] & 0x80) out = Buffer.concat([Buffer.from([0]), out]);
-    return out;
-  };
-  const derR = trim(r);
-  const derS = trim(s);
-  const body = Buffer.concat([
-    Buffer.from([0x02, derR.length]),
-    derR,
-    Buffer.from([0x02, derS.length]),
-    derS,
-  ]);
-  return Buffer.concat([Buffer.from([0x30, body.length]), body]);
 }
 
 async function getAppleKey(kid) {
@@ -60,8 +44,8 @@ async function getAppleKey(kid) {
 }
 
 async function verifyAppleIdToken(idToken) {
-  const audience = getAppleAudience();
-  if (!audience) {
+  const audiences = getAppleAudiences();
+  if (audiences.length === 0) {
     const err = new Error("Apple sign-in is not configured.");
     err.status = 503;
     throw err;
@@ -85,12 +69,13 @@ async function verifyAppleIdToken(idToken) {
 
   const key = await getAppleKey(header.kid);
   const rawSignature = Buffer.from(encodedSignature, "base64url");
-  const ok = rawSignature.length === 64 && crypto.verify(
-    "sha256",
-    Buffer.from(`${encodedHeader}.${encodedPayload}`),
-    key,
-    rawEcdsaToDer(rawSignature),
-  );
+  const ok = rawSignature.length === 64
+    && crypto.verify(
+      "sha256",
+      Buffer.from(`${encodedHeader}.${encodedPayload}`),
+      { key, dsaEncoding: "ieee-p1363" },
+      rawSignature,
+    );
   if (!ok) {
     const err = new Error("Invalid Apple credential.");
     err.status = 401;
@@ -103,7 +88,7 @@ async function verifyAppleIdToken(idToken) {
     err.status = 401;
     throw err;
   }
-  if (payload.aud !== audience) {
+  if (!audiences.includes(payload.aud)) {
     const err = new Error("Invalid Apple audience.");
     err.status = 401;
     throw err;
@@ -196,9 +181,10 @@ module.exports = async (req, res) => {
     }
   } catch (err) {
     const status = err.status || 500;
-    if (status >= 500) {
-      console.error(err);
-    }
+    console.error("Apple sign-in failed", {
+      message: err.message,
+      status,
+    });
     return res.status(status).json({ error: err.message || "Apple sign-in failed" });
   }
 };
