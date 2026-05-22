@@ -111,7 +111,7 @@ To test it:
 3. Pick an iPhone simulator.
 4. Press **Run**.
 
-Current bundle id: **`com.paulhutton.wfhattendance.ios`**. Current display name: **`Paul Attendance`**.
+Current bundle id: **`com.paulhutton.wfhattendance.ios`**. Current display name: **`Work Attendance`**.
 
 ## 7. Security notes
 
