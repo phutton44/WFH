@@ -25,28 +25,6 @@ function decodeBase64UrlJson(part) {
   return JSON.parse(Buffer.from(String(part), "base64url").toString("utf8"));
 }
 
-function rawEcdsaToDer(signature) {
-  const size = signature.length / 2;
-  const r = signature.subarray(0, size);
-  const s = signature.subarray(size);
-  const trim = (bytes) => {
-    let i = 0;
-    while (i < bytes.length - 1 && bytes[i] === 0) i += 1;
-    let out = bytes.subarray(i);
-    if (out[0] & 0x80) out = Buffer.concat([Buffer.from([0]), out]);
-    return out;
-  };
-  const derR = trim(r);
-  const derS = trim(s);
-  const body = Buffer.concat([
-    Buffer.from([0x02, derR.length]),
-    derR,
-    Buffer.from([0x02, derS.length]),
-    derS,
-  ]);
-  return Buffer.concat([Buffer.from([0x30, body.length]), body]);
-}
-
 function extractAppleCredential(body) {
   const candidates = [
     body?.idToken,
@@ -117,29 +95,19 @@ async function verifyAppleIdToken(idToken) {
   const [encodedHeader, encodedPayload, encodedSignature] = parts;
   const header = decodeBase64UrlJson(encodedHeader);
   const payload = decodeBase64UrlJson(encodedPayload);
-  if (header.alg !== "ES256" || !header.kid) {
+  if (header.alg !== "RS256" || !header.kid) {
     const err = new Error("Apple sign-in token header was invalid.");
     err.status = 400;
     throw err;
   }
 
   const key = await getAppleKey(header.kid);
-  const rawSignature = Buffer.from(encodedSignature, "base64url");
-  const ok = rawSignature.length === 64
-    && (
-      crypto.verify(
-        "sha256",
-        Buffer.from(`${encodedHeader}.${encodedPayload}`),
-        { key, dsaEncoding: "ieee-p1363" },
-        rawSignature,
-      )
-      || crypto.verify(
-        "sha256",
-        Buffer.from(`${encodedHeader}.${encodedPayload}`),
-        key,
-        rawEcdsaToDer(rawSignature),
-      )
-    );
+  const ok = crypto.verify(
+    "RSA-SHA256",
+    Buffer.from(`${encodedHeader}.${encodedPayload}`),
+    key,
+    Buffer.from(encodedSignature, "base64url"),
+  );
   if (!ok) {
     const err = new Error("Apple sign-in token signature was invalid.");
     err.status = 401;
