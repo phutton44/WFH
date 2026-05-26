@@ -140,6 +140,10 @@ enum DateHelpers {
         String(format: "%04d-%02d", year, min(max(month, 1), 12))
     }
 
+    static func normalizedMonth(_ month: Int) -> Int {
+        min(max(month, 1), 12)
+    }
+
     static func monthStartISO(_ key: String) -> String {
         "\(validMonthKey(key) ?? currentMonthKey)-01"
     }
@@ -157,6 +161,40 @@ enum DateHelpers {
         let parts = key.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 2, (1...12).contains(parts[1]) else { return nil }
         return (parts[0], parts[1])
+    }
+
+    static func reportingYear(for iso: String, startMonth: Int) -> Int {
+        let parts = iso.split(separator: "-").compactMap { Int($0) }
+        guard parts.count >= 2 else { return currentYear }
+        let month = normalizedMonth(startMonth)
+        return parts[1] < month ? parts[0] - 1 : parts[0]
+    }
+
+    static func reportingYearBounds(year: Int, startMonth: Int) -> (startISO: String, endISO: String) {
+        let month = normalizedMonth(startMonth)
+        let start = iso(year: year, month: month, day: 1)
+        let endYear = month == 1 ? year : year + 1
+        let endMonth = month == 1 ? 12 : month - 1
+        let end = iso(year: endYear, month: endMonth, day: daysInMonth(year: endYear, month: endMonth))
+        return (start, end)
+    }
+
+    static func reportingYearMonths(year: Int, startMonth: Int) -> [Month] {
+        let month = normalizedMonth(startMonth)
+        return (0..<12).map { offset in
+            let rawMonth = month + offset
+            let displayYear = year + ((rawMonth - 1) / 12)
+            let displayMonth = ((rawMonth - 1) % 12) + 1
+            return Month(year: displayYear, month: displayMonth)
+        }
+    }
+
+    static func reportingQuarter(for iso: String, startMonth: Int) -> Int {
+        let parts = iso.split(separator: "-").compactMap { Int($0) }
+        guard parts.count >= 2 else { return 1 }
+        let month = normalizedMonth(startMonth)
+        let offset = (parts[1] - month + 12) % 12
+        return (offset / 3) + 1
     }
 
     static func date(from iso: String) -> Date? {

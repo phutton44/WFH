@@ -169,14 +169,15 @@ final class AttendanceStore: ObservableObject {
         bulkUndo = nil
     }
 
-    func updateSettings(name: String, targetPct: Double, leaveAllowance: Int, year: Int, recordingStartMonth: String) async {
+    func updateSettings(name: String, targetPct: Double, leaveAllowance: Int, year: Int, recordingStartMonth: String, yearStartMonth: Int) async {
         await refreshState(showIndicator: false, reportErrors: false, createIfMissing: false)
         state.updateSettings(
             name: name,
             targetPct: targetPct,
             leaveAllowance: leaveAllowance,
             year: year,
-            recordingStartMonth: recordingStartMonth
+            recordingStartMonth: recordingStartMonth,
+            yearStartMonth: yearStartMonth
         )
         persistState()
         await saveState()

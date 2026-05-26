@@ -9,6 +9,7 @@ struct SettingsScreen: View {
     @State private var leaveYear = DateHelpers.currentYear
     @State private var recordingStartYear = DateHelpers.currentYear
     @State private var recordingStartMonth = DateHelpers.currentMonth
+    @State private var yearStartMonth = 1
     @State private var hasLoadedSettings = false
     @State private var showingAbout = false
 
@@ -66,17 +67,22 @@ struct SettingsScreen: View {
 
                         Spacer(minLength: 6)
 
-                        Text("\(targetPct, specifier: "%.1f")%")
+                        Text("\(Int(targetPct.rounded()))%")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                             .monospacedDigit()
 
-                        Stepper("", value: $targetPct, in: 0...100, step: 0.5)
+                        Stepper("", value: $targetPct, in: 0...100, step: 1)
                             .labelsHidden()
                             .tint(.cyan)
                             .accessibilityLabel("Office target")
-                            .accessibilityValue("\(targetPct, specifier: "%.1f") percent")
+                            .accessibilityValue("\(Int(targetPct.rounded())) percent")
                     }
+
+                    Text("Sets the percentage of counted working days you aim to spend in the office.")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(8)
                 .settingsCardStyle()
@@ -111,6 +117,38 @@ struct SettingsScreen: View {
                         }
                     }
 
+                    Text("Sets the first month the app should include in your records and reports.")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                }
+                .padding(8)
+                .settingsCardStyle()
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 10) {
+                        Text("Year Starts")
+                            .font(.subheadline.weight(.bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+
+                        Spacer(minLength: 6)
+
+                        Picker("Year starts", selection: $yearStartMonth) {
+                            ForEach(1...12, id: \.self) { month in
+                                Text(DateHelpers.monthNames[month - 1]).tag(month)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(.cyan)
+                        .accessibilityLabel("Year starts")
+                    }
+
+                    Text("Sets the first month of your annual leave and yearly report period.")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(8)
                 .settingsCardStyle()
@@ -145,6 +183,11 @@ struct SettingsScreen: View {
                         .accessibilityLabel("Leave year")
                     }
                     .padding(.horizontal, 9)
+
+                    Text("Sets how many annual leave days are available for the selected year.")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(8)
                 .settingsCardStyle()
@@ -214,7 +257,8 @@ struct SettingsScreen: View {
             let startParts = store.profile.recordingStartMonthParts
             recordingStartYear = startParts.year
             recordingStartMonth = startParts.month
-            leaveYear = DateHelpers.currentYear
+            yearStartMonth = store.profile.yearStartMonth
+            leaveYear = store.profile.reportingYear(for: DateHelpers.todayISO())
             clampLeaveYearToRecordingStart()
             leaveAllowance = Double(store.profile.allowance(for: leaveYear))
             hasLoadedSettings = true
@@ -223,6 +267,9 @@ struct SettingsScreen: View {
             leaveAllowance = Double(store.profile.allowance(for: year))
         }
         .onChange(of: recordingStartMonthKey) { _, _ in
+            clampLeaveYearToRecordingStart()
+        }
+        .onChange(of: yearStartMonth) { _, _ in
             clampLeaveYearToRecordingStart()
         }
         .task(id: autosaveKey) {
@@ -234,18 +281,20 @@ struct SettingsScreen: View {
                 targetPct: targetPct,
                 leaveAllowance: Int(leaveAllowance),
                 year: leaveYear,
-                recordingStartMonth: recordingStartMonthKey
+                recordingStartMonth: recordingStartMonthKey,
+                yearStartMonth: yearStartMonth
             )
         }
     }
 
     private var autosaveKey: String {
-        "\(name)|\(targetPct)|\(leaveYear)|\(Int(leaveAllowance))|\(recordingStartMonthKey)"
+        "\(name)|\(targetPct)|\(leaveYear)|\(Int(leaveAllowance))|\(recordingStartMonthKey)|\(yearStartMonth)"
     }
 
     private var leaveYearOptions: [Int] {
-        let startYear = recordingStartYear
-        let nearbyYears = Set(startYear...max(startYear, DateHelpers.currentYear + 3))
+        let startYear = DateHelpers.reportingYear(for: "\(recordingStartMonthKey)-01", startMonth: yearStartMonth)
+        let currentReportingYear = DateHelpers.reportingYear(for: DateHelpers.todayISO(), startMonth: yearStartMonth)
+        let nearbyYears = Set(startYear...max(startYear, currentReportingYear + 3))
         let configuredYears = Set(store.profile.settings.leaveAllowances.keys.compactMap(Int.init))
         return Array(nearbyYears.union(configuredYears).filter { $0 >= startYear }).sorted()
     }
@@ -265,9 +314,10 @@ struct SettingsScreen: View {
     }
 
     private func clampLeaveYearToRecordingStart() {
-        if leaveYear < recordingStartYear {
-            leaveYear = recordingStartYear
-            leaveAllowance = Double(store.profile.allowance(for: recordingStartYear))
+        let startYear = DateHelpers.reportingYear(for: "\(recordingStartMonthKey)-01", startMonth: yearStartMonth)
+        if leaveYear < startYear {
+            leaveYear = startYear
+            leaveAllowance = Double(store.profile.allowance(for: startYear))
         }
     }
 }
@@ -283,7 +333,7 @@ private struct AboutAppSheet: View {
                     .foregroundStyle(Color.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("It also tracks annual leave allowance, recording start dates, monthly progress, year-to-date totals, and report exports so your attendance picture stays clear without spreadsheet wrestling.")
+                Text("It also tracks annual leave allowance, recording start dates, configurable reporting years, monthly progress, year totals, and report exports so your attendance picture stays clear without spreadsheet wrestling.")
                     .font(.body)
                     .foregroundStyle(Color.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)

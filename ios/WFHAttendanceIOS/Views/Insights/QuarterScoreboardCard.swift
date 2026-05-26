@@ -34,9 +34,9 @@ struct QuarterScoreboardCard: View {
     }
 
     private var currentQuarter: Int {
-        let current = DateHelpers.todayParts()
-        guard current.year == year else { return 0 }
-        return ((current.month - 1) / 3) + 1
+        let today = DateHelpers.todayISO()
+        guard store.profile.reportingYear(for: today) == year else { return 0 }
+        return DateHelpers.reportingQuarter(for: today, startMonth: store.profile.yearStartMonth)
     }
 
     private var activeQuarter: Int {
@@ -44,11 +44,13 @@ struct QuarterScoreboardCard: View {
     }
 
     private func metrics(for quarter: Int) -> Metrics? {
+        let months = store.profile.reportingYearMonths(for: year)
+        let quarterMonths = Array(months[((quarter - 1) * 3)..<min(quarter * 3, months.count)])
+        guard let first = quarterMonths.first, let last = quarterMonths.last else { return nil }
+        let start = first.startISO
+        let endOfQuarter = last.endISO
+
         if let cutoffISO {
-            let startMonth = (quarter - 1) * 3 + 1
-            let endMonth = startMonth + 2
-            let start = DateHelpers.iso(year: year, month: startMonth, day: 1)
-            let endOfQuarter = DateHelpers.iso(year: year, month: endMonth, day: DateHelpers.daysInMonth(year: year, month: endMonth))
             let quarterMetrics = store.metrics(from: start, through: endOfQuarter, respectingRecordingStart: true)
             guard start <= cutoffISO else {
                 var forecast = Metrics()
@@ -63,10 +65,6 @@ struct QuarterScoreboardCard: View {
             return forecast
         }
 
-        let startMonth = (quarter - 1) * 3 + 1
-        let endMonth = startMonth + 2
-        let start = DateHelpers.iso(year: year, month: startMonth, day: 1)
-        let endOfQuarter = DateHelpers.iso(year: year, month: endMonth, day: DateHelpers.daysInMonth(year: year, month: endMonth))
         return store.metrics(from: start, through: endOfQuarter, respectingRecordingStart: true)
     }
 }

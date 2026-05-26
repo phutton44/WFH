@@ -14,7 +14,8 @@ struct KPIScreen: View {
         let monthOutlookMetrics = metricsForFullMonthOutlook()
         let monthToDateEnd = monthToDateEndISO()
         let bankHolidayCount = bankHolidayCountForActiveSelection()
-        let leave = store.leaveBreakdown(year: month.year)
+        let reportYear = scope == .year ? month.year : store.profile.reportingYear(for: month.startISO)
+        let leave = store.leaveBreakdown(year: reportYear)
         let activeShare = activeMetrics.monthOfficeShare
         let target = store.profile.settings.targetPct
         let rangeTitle = scope == .month
@@ -64,11 +65,11 @@ struct KPIScreen: View {
                         cutoffISO: rangeMode == .yearToDate ? monthToDateEnd : nil
                     )
                     QuarterScoreboardCard(
-                        year: month.year,
+                        year: reportYear,
                         mode: .recordedInformation,
                         compact: true,
                         dense: false,
-                        highlightedQuarter: month.quarter,
+                        highlightedQuarter: DateHelpers.reportingQuarter(for: month.startISO, startMonth: store.profile.yearStartMonth),
                         cutoffISO: rangeMode == .yearToDate ? monthToDateEnd : nil
                     )
                     MonthDetailsCard(
@@ -167,12 +168,17 @@ struct KPIScreen: View {
         case .month:
             return month.key > store.profile.recordingStartMonthKey
         case .year:
-            return month.year > store.profile.recordingStartMonthParts.year
+            let previousBounds = store.profile.reportingYearBounds(for: month.year - 1)
+            return previousBounds.endISO >= DateHelpers.monthStartISO(store.profile.recordingStartMonthKey)
         }
     }
 
     private var defaultVisibleMonth: Month {
         let current = Month.current()
+        if scope == .year {
+            let reportYear = store.profile.reportingYear(for: DateHelpers.todayISO())
+            return Month(year: reportYear, month: current.month)
+        }
         guard current.key < store.profile.recordingStartMonthKey,
               let startMonth = Month(key: store.profile.recordingStartMonthKey) else { return current }
         return startMonth
@@ -186,8 +192,10 @@ struct KPIScreen: View {
                   let startMonth = Month(key: store.profile.recordingStartMonthKey) else { return }
             month = startMonth
         case .year:
-            if month.year < startParts.year {
-                month = Month(year: startParts.year, month: startParts.month)
+            let bounds = store.profile.reportingYearBounds(for: month.year)
+            if bounds.endISO < DateHelpers.monthStartISO(store.profile.recordingStartMonthKey) {
+                let firstYear = store.profile.reportingYear(for: DateHelpers.monthStartISO(store.profile.recordingStartMonthKey))
+                month = Month(year: firstYear, month: startParts.month)
             }
         }
     }
@@ -207,7 +215,8 @@ struct KPIScreen: View {
             let end = rangeMode == .yearToDate ? (monthToDateEndISO() ?? month.endISO) : month.endISO
             return countBankHolidays(from: month.startISO, through: end)
         case .year:
-            return countBankHolidays(from: yearMetricsStartISO(), through: "\(month.year)-12-31")
+            let bounds = yearMetricsBounds()
+            return countBankHolidays(from: bounds.startISO, through: bounds.endISO)
         }
     }
 
@@ -229,17 +238,14 @@ struct KPIScreen: View {
     }
 
     private func metricsForYear() -> Metrics {
-        let start = yearMetricsStartISO()
-        let endOfYear = "\(month.year)-12-31"
-        return store.metrics(from: start, through: endOfYear, respectingRecordingStart: true)
+        let bounds = yearMetricsBounds()
+        return store.metrics(from: bounds.startISO, through: bounds.endISO, respectingRecordingStart: true)
     }
 
-    private func yearMetricsStartISO() -> String {
-        let startParts = store.profile.recordingStartMonthParts
-        guard month.year == startParts.year else {
-            return "\(month.year)-01-01"
-        }
-        return DateHelpers.monthStartISO(store.profile.recordingStartMonthKey)
+    private func yearMetricsBounds() -> (startISO: String, endISO: String) {
+        let bounds = store.profile.reportingYearBounds(for: month.year)
+        let recordingStart = DateHelpers.monthStartISO(store.profile.recordingStartMonthKey)
+        return (max(bounds.startISO, recordingStart), bounds.endISO)
     }
 
     private func countBankHolidays(from start: String, through end: String) -> Int {

@@ -33,7 +33,7 @@ struct YearReportPDFRenderer {
         UIBezierPath(rect: page).fill()
 
         drawText("Annual Attendance Insights", in: CGRect(x: margin, y: 25, width: 320, height: 26), font: .boldSystemFont(ofSize: 22), color: Palette.ink)
-        drawText("\(report.year) report", in: CGRect(x: margin, y: 53, width: 220, height: 16), font: .systemFont(ofSize: 10, weight: .semibold), color: Palette.muted)
+        drawText(report.yearTitle, in: CGRect(x: margin, y: 53, width: 260, height: 16), font: .systemFont(ofSize: 10, weight: .semibold), color: Palette.muted)
         drawText(report.ownerLine, in: CGRect(x: page.width - margin - 270, y: 31, width: 270, height: 14), font: .systemFont(ofSize: 8.5, weight: .semibold), color: Palette.muted, alignment: .right)
         drawText("Generated \(DateHelpers.readableToday)", in: CGRect(x: page.width - margin - 270, y: 49, width: 270, height: 14), font: .systemFont(ofSize: 8.5), color: Palette.muted, alignment: .right)
 
@@ -1143,6 +1143,7 @@ private struct YearReportData {
     let leave: LeaveBreakdown
     let bankHolidayCount: Int
     let recordingStartMonthKey: String
+    let yearStartMonth: Int
 
     init(year: Int, profile: AttendanceProfile, userEmail: String?) {
         self.year = year
@@ -1150,9 +1151,9 @@ private struct YearReportData {
         self.userEmail = userEmail
         target = profile.settings.targetPct
         recordingStartMonthKey = profile.recordingStartMonthKey
+        yearStartMonth = profile.yearStartMonth
         let marks = AttendanceMarkIndex(profile: profile)
-        months = (1...12).map { month in
-            let period = Month(year: year, month: month)
+        months = profile.reportingYearMonths(for: year).map { period in
             let metrics = profile.metrics(from: period.startISO, through: period.endISO, respectingRecordingStart: true)
             return YearReportMonthRow(
                 month: period,
@@ -1161,9 +1162,9 @@ private struct YearReportData {
                 recordingStartMonthKey: profile.recordingStartMonthKey
             )
         }
-        let startParts = profile.recordingStartMonthParts
-        let start = year == startParts.year ? DateHelpers.monthStartISO(profile.recordingStartMonthKey) : "\(year)-01-01"
-        let end = "\(year)-12-31"
+        let bounds = profile.reportingYearBounds(for: year)
+        let start = max(bounds.startISO, DateHelpers.monthStartISO(profile.recordingStartMonthKey))
+        let end = bounds.endISO
         yearMetrics = profile.metrics(from: start, through: end, respectingRecordingStart: true)
         leave = profile.leaveBreakdown(year: year, today: DateHelpers.todayISO())
         bankHolidayCount = YearReportData.countBankHolidays(from: start, through: end)
@@ -1179,7 +1180,15 @@ private struct YearReportData {
     var monthMapSubtitle: String {
         let start = DateHelpers.monthParts(fromKey: recordingStartMonthKey)
         let startTitle = start.map { "\(DateHelpers.monthNames[$0.month - 1]) \($0.year)" } ?? recordingStartMonthKey
-        return "Recording start: \(startTitle) · \(year) monthly maps"
+        return "Recording start: \(startTitle) · Year starts \(DateHelpers.monthNames[yearStartMonth - 1])"
+    }
+
+    var yearTitle: String {
+        let bounds = DateHelpers.reportingYearBounds(year: year, startMonth: yearStartMonth)
+        if yearStartMonth == 1 {
+            return "\(year) report"
+        }
+        return "\(year) report · \(bounds.startISO) to \(bounds.endISO)"
     }
 
     var workedDays: Int {

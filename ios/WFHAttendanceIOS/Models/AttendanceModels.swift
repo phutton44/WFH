@@ -102,7 +102,7 @@ struct AttendanceState: Codable {
         activeProfile.hasAssignedDays(in: dates)
     }
 
-    mutating func updateSettings(name: String, targetPct: Double, leaveAllowance: Int, year: Int, recordingStartMonth: String) {
+    mutating func updateSettings(name: String, targetPct: Double, leaveAllowance: Int, year: Int, recordingStartMonth: String, yearStartMonth: Int) {
         guard let index = profiles.firstIndex(where: { $0.id == activeProfileId }) else { return }
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedName.isEmpty {
@@ -111,6 +111,7 @@ struct AttendanceState: Codable {
         profiles[index].settings.targetPct = targetPct
         profiles[index].settings.leaveAllowances[String(year)] = leaveAllowance
         profiles[index].settings.recordingStartMonth = DateHelpers.validMonthKey(recordingStartMonth) ?? DateHelpers.currentMonthKey
+        profiles[index].settings.yearStartMonth = DateHelpers.normalizedMonth(yearStartMonth)
     }
 
     mutating func setMonth(_ monthKey: String, locked: Bool) {
@@ -211,7 +212,8 @@ struct AttendanceProfile: Codable {
             settings: ProfileSettings(
                 targetPct: 40,
                 leaveAllowances: [String(DateHelpers.currentYear): 25],
-                recordingStartMonth: DateHelpers.currentMonthKey
+                recordingStartMonth: DateHelpers.currentMonthKey,
+                yearStartMonth: 1
             ),
             officeMarks: [],
             leaveMarks: [],
@@ -240,6 +242,22 @@ struct AttendanceProfile: Codable {
         settings.leaveAllowances[String(year)]
             ?? settings.leaveAllowances[String(DateHelpers.currentYear)]
             ?? 25
+    }
+
+    var yearStartMonth: Int {
+        DateHelpers.normalizedMonth(settings.yearStartMonth ?? 1)
+    }
+
+    func reportingYear(for date: String) -> Int {
+        DateHelpers.reportingYear(for: date, startMonth: yearStartMonth)
+    }
+
+    func reportingYearBounds(for year: Int) -> (startISO: String, endISO: String) {
+        DateHelpers.reportingYearBounds(year: year, startMonth: yearStartMonth)
+    }
+
+    func reportingYearMonths(for year: Int) -> [Month] {
+        DateHelpers.reportingYearMonths(year: year, startMonth: yearStartMonth)
     }
 
     var recordingStartMonthKey: String {
@@ -285,13 +303,14 @@ struct AttendanceProfile: Codable {
         for date in dates {
             guard DateHelpers.isAssignableWorkday(date, excludingNWD: effectiveNWDMarks) else { continue }
             guard marks.kind(for: date) != .leave else { continue }
-            let year = Int(date.prefix(4)) ?? DateHelpers.currentYear
+            let year = reportingYear(for: date)
             requestedByYear[year, default: 0] += 1
         }
 
         for year in requestedByYear.keys.sorted() {
             let requested = requestedByYear[year] ?? 0
-            let used = leaveMarks.filter { $0.hasPrefix("\(year)-") }.count
+            let bounds = reportingYearBounds(for: year)
+            let used = leaveMarks.filter { $0 >= bounds.startISO && $0 <= bounds.endISO }.count
             let remaining = max(allowance(for: year) - used, 0)
             guard requested > remaining else { continue }
             return LeaveShortfallWarning(
@@ -348,8 +367,9 @@ struct AttendanceProfile: Codable {
                 throw AppError.message("That day is not an assignable working day.")
             }
             if kind == .leave {
-                let year = Int(date.prefix(4)) ?? DateHelpers.currentYear
-                let used = leaveMarks.filter { $0.hasPrefix("\(year)-") }.count
+                let year = reportingYear(for: date)
+                let bounds = reportingYearBounds(for: year)
+                let used = leaveMarks.filter { $0 >= bounds.startISO && $0 <= bounds.endISO }.count
                 guard used < allowance(for: year) else {
                     throw AppError.message("Leave allowance reached for \(year).")
                 }
@@ -417,7 +437,8 @@ struct AttendanceProfile: Codable {
     func leaveBreakdown(year: Int, today: String) -> LeaveBreakdown {
         var taken = 0
         var booked = 0
-        for date in leaveMarks where date.hasPrefix("\(year)-") {
+        let bounds = reportingYearBounds(for: year)
+        for date in leaveMarks where date >= bounds.startISO && date <= bounds.endISO {
             if date <= today {
                 taken += 1
             } else {
@@ -465,18 +486,21 @@ struct ProfileSettings: Codable {
     var targetPct: Double
     var leaveAllowances: [String: Int]
     var recordingStartMonth: String?
+    var yearStartMonth: Int?
 
-    init(targetPct: Double, leaveAllowances: [String: Int], recordingStartMonth: String? = nil) {
+    init(targetPct: Double, leaveAllowances: [String: Int], recordingStartMonth: String? = nil, yearStartMonth: Int? = 1) {
         self.targetPct = targetPct
         self.leaveAllowances = leaveAllowances
         self.recordingStartMonth = recordingStartMonth
+        self.yearStartMonth = yearStartMonth
     }
 
     static func defaultSettings() -> ProfileSettings {
         ProfileSettings(
             targetPct: 40,
             leaveAllowances: [String(DateHelpers.currentYear): 25],
-            recordingStartMonth: DateHelpers.currentMonthKey
+            recordingStartMonth: DateHelpers.currentMonthKey,
+            yearStartMonth: 1
         )
     }
 }

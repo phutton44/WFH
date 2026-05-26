@@ -6,6 +6,8 @@ struct CalendarScreen: View {
     @State private var selectedDates: Set<String> = []
     @State private var selectedFromSelectAll = false
     @State private var showingDaysExplained = false
+    @State private var showingLockExplanation = false
+    @AppStorage("hasSeenMonthLockExplanation") private var hasSeenMonthLockExplanation = false
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 5), count: 7)
 
@@ -36,6 +38,11 @@ struct CalendarScreen: View {
                         },
                         toggleLock: {
                             guard !isBeforeRecordingStart else { return }
+                            if !hasSeenMonthLockExplanation {
+                                hasSeenMonthLockExplanation = true
+                                showingLockExplanation = true
+                                return
+                            }
                             Task {
                                 await store.setMonth(visibleMonth, locked: !isLocked)
                                 selectedDates.removeAll()
@@ -107,6 +114,17 @@ struct CalendarScreen: View {
             DaysExplainedSheet()
                 .presentationDetents([.height(460), .large])
                 .presentationDragIndicator(.visible)
+        }
+        .alert("Lock month", isPresented: $showingLockExplanation) {
+            Button("Not now", role: .cancel) {}
+            Button("Lock this month") {
+                Task {
+                    await store.setMonth(visibleMonth, locked: true)
+                    selectedDates.removeAll()
+                }
+            }
+        } message: {
+            Text("Locking a month stops accidental edits once you are happy with its attendance record. You can unlock it again any time by tapping the padlock.")
         }
         .onAppear {
             snapToRecordingStartIfNeeded()
