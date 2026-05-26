@@ -81,7 +81,7 @@ struct SettingsScreen: View {
 
                     Text("Sets the percentage of counted working days you aim to spend in the office.")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.secondaryText)
+                        .foregroundStyle(Color.holidayGreen)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(8)
@@ -119,7 +119,7 @@ struct SettingsScreen: View {
 
                     Text("Sets the first month the app should include in your records and reports.")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.secondaryText)
+                        .foregroundStyle(Color.holidayGreen)
                         .fixedSize(horizontal: false, vertical: true)
 
                 }
@@ -147,7 +147,7 @@ struct SettingsScreen: View {
 
                     Text("Sets the first month of your annual leave and yearly report period.")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.secondaryText)
+                        .foregroundStyle(Color.holidayGreen)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(8)
@@ -159,8 +159,6 @@ struct SettingsScreen: View {
                             .font(.subheadline.weight(.bold))
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)
-
-                        Spacer(minLength: 6)
 
                         Text("\(Int(leaveAllowance)) days")
                             .font(.headline.weight(.bold))
@@ -181,44 +179,30 @@ struct SettingsScreen: View {
                         .pickerStyle(.menu)
                         .tint(.cyan)
                         .accessibilityLabel("Leave year")
+
+                        Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 9)
 
                     Text("Sets how many annual leave days are available for the selected year.")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.secondaryText)
+                        .foregroundStyle(Color.holidayGreen)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(8)
                 .settingsCardStyle()
 
                 VStack(alignment: .leading, spacing: 5) {
-                    Button {
-                        showingAbout = true
-                    } label: {
-                        HStack(spacing: 10) {
-                            Label("About", systemImage: "info.circle")
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(Color.primaryText)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(Color.secondaryText)
-                        }
-                        .padding(.vertical, 4)
+                    HStack(spacing: 10) {
+                        Text("Account")
+                            .font(.subheadline.weight(.bold))
+                        Spacer(minLength: 8)
+                        Text(store.user?.email ?? "")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.secondaryText)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+                            .textSelection(.enabled)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("About this app")
-                }
-                .padding(8)
-                .settingsCardStyle()
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Account")
-                        .font(.subheadline.weight(.bold))
-                    Text(store.user?.email ?? "")
-                        .font(.subheadline)
-                        .textSelection(.enabled)
                     Divider()
                         .overlay(Color.borderSubtle)
                     Button(role: .destructive) {
@@ -246,9 +230,21 @@ struct SettingsScreen: View {
         }
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle("Settings")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showingAbout = true
+                } label: {
+                    Text("About")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(Color.cyan)
+                }
+                .accessibilityLabel("About this app")
+            }
+        }
         .sheet(isPresented: $showingAbout) {
             AboutAppSheet()
-                .presentationDetents([.medium])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .onAppear {
@@ -327,27 +323,33 @@ private struct AboutAppSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Work Attendance helps you keep a simple, honest record of where your working days go. Mark each day as office, work from home, annual leave, sickness, or non-working, then use the calendar and insight views to see whether you are on track against your office attendance target.")
-                    .font(.body)
-                    .foregroundStyle(Color.primaryText)
-                    .fixedSize(horizontal: false, vertical: true)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("About")
+                        .font(.largeTitle.weight(.bold))
+                        .foregroundStyle(Color.primaryText)
+                        .padding(.top, 10)
 
-                Text("It also tracks annual leave allowance, recording start dates, configurable reporting years, monthly progress, year totals, and report exports so your attendance picture stays clear without spreadsheet wrestling.")
-                    .font(.body)
-                    .foregroundStyle(Color.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Text("Work Attendance helps you keep a simple, honest record of where your working days go. Mark each day as office, work from home, annual leave, sickness, or non-working, then use the calendar and insight views to see whether you are on track against your office attendance target.")
+                        .font(.body)
+                        .foregroundStyle(Color.primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                Text("A working day is a weekday that is available to be counted as either office or work from home. Annual leave, sickness, bank holidays, weekends, and non-working days are excluded from office target calculations.")
-                    .font(.body)
-                    .foregroundStyle(Color.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Text("It also tracks annual leave allowance, recording start dates, configurable reporting years, monthly progress, year totals, and report exports so your attendance picture stays clear without spreadsheet wrestling.")
+                        .font(.body)
+                        .foregroundStyle(Color.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                Spacer()
+                    Text("A working day is a weekday that is available to be counted as either office or work from home. Annual leave, sickness, bank holidays, weekends, and non-working days are excluded from office target calculations.")
+                        .font(.body)
+                        .foregroundStyle(Color.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(18)
             }
-            .padding(18)
             .background(Color.appBackground.ignoresSafeArea())
-            .navigationTitle("About")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {

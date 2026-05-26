@@ -132,6 +132,12 @@ enum DateHelpers {
         return "\(parts.day) \(monthNames[parts.month - 1]) \(parts.year)"
     }
 
+    static func readableDate(_ iso: String) -> String {
+        let parts = iso.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3, (1...12).contains(parts[1]) else { return iso }
+        return "\(parts[2]) \(monthNames[parts[1] - 1]) \(parts[0])"
+    }
+
     static func iso(year: Int, month: Int, day: Int) -> String {
         String(format: "%04d-%02d-%02d", year, month, day)
     }

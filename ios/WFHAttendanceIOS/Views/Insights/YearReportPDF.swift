@@ -32,8 +32,8 @@ struct YearReportPDFRenderer {
         Palette.paper.setFill()
         UIBezierPath(rect: page).fill()
 
-        drawText("Annual Attendance Insights", in: CGRect(x: margin, y: 25, width: 320, height: 26), font: .boldSystemFont(ofSize: 22), color: Palette.ink)
-        drawText(report.yearTitle, in: CGRect(x: margin, y: 53, width: 260, height: 16), font: .systemFont(ofSize: 10, weight: .semibold), color: Palette.muted)
+        drawText(report.yearTitle, in: CGRect(x: margin, y: 25, width: 390, height: 26), font: .boldSystemFont(ofSize: 19), color: Palette.ink)
+        drawText("Annual Attendance Insights", in: CGRect(x: margin, y: 53, width: 260, height: 16), font: .systemFont(ofSize: 10, weight: .semibold), color: Palette.muted)
         drawText(report.ownerLine, in: CGRect(x: page.width - margin - 270, y: 31, width: 270, height: 14), font: .systemFont(ofSize: 8.5, weight: .semibold), color: Palette.muted, alignment: .right)
         drawText("Generated \(DateHelpers.readableToday)", in: CGRect(x: page.width - margin - 270, y: 49, width: 270, height: 14), font: .systemFont(ofSize: 8.5), color: Palette.muted, alignment: .right)
 
@@ -1185,10 +1185,7 @@ private struct YearReportData {
 
     var yearTitle: String {
         let bounds = DateHelpers.reportingYearBounds(year: year, startMonth: yearStartMonth)
-        if yearStartMonth == 1 {
-            return "\(year) report"
-        }
-        return "\(year) report · \(bounds.startISO) to \(bounds.endISO)"
+        return "\(DateHelpers.readableDate(bounds.startISO)) - \(DateHelpers.readableDate(bounds.endISO))"
     }
 
     var workedDays: Int {

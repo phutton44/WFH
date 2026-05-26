@@ -43,6 +43,10 @@
 		910000000000000000000113 /* LeaveInfographicCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000213 /* LeaveInfographicCard.swift */; };
 		910000000000000000000114 /* YearReportPDF.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910000000000000000000214 /* YearReportPDF.swift */; };
 		920000000000000000000101 /* WorkingDayNotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 920000000000000000000201 /* WorkingDayNotificationScheduler.swift */; };
+		A00000000000000000000101 /* ReportingYearTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000201 /* ReportingYearTests.swift */; };
+		A00000000000000000000102 /* TestSupportStubs.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000202 /* TestSupportStubs.swift */; };
+		A00000000000000000000103 /* AttendanceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 900000000000000000000202 /* AttendanceModels.swift */; };
+		A00000000000000000000104 /* DateHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 900000000000000000000207 /* DateHelpers.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -85,10 +89,20 @@
 		910000000000000000000213 /* LeaveInfographicCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaveInfographicCard.swift; sourceTree = "<group>"; };
 		910000000000000000000214 /* YearReportPDF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YearReportPDF.swift; sourceTree = "<group>"; };
 		920000000000000000000201 /* WorkingDayNotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkingDayNotificationScheduler.swift; sourceTree = "<group>"; };
+		A00000000000000000000201 /* ReportingYearTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportingYearTests.swift; sourceTree = "<group>"; };
+		A00000000000000000000202 /* TestSupportStubs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupportStubs.swift; sourceTree = "<group>"; };
+		A00000000000000000000301 /* WFHAttendanceIOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WFHAttendanceIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		1A2B3C4D5E6F700000000120 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000120 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -102,6 +116,7 @@
 			isa = PBXGroup;
 			children = (
 				1A2B3C4D5E6F700000000010 /* WFHAttendanceIOS */,
+				A00000000000000000000010 /* WFHAttendanceIOSTests */,
 				1A2B3C4D5E6F700000000020 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -127,8 +142,18 @@
 			isa = PBXGroup;
 			children = (
 				1A2B3C4D5E6F700000000301 /* WFH Attendance.app */,
+				A00000000000000000000301 /* WFHAttendanceIOSTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000010 /* WFHAttendanceIOSTests */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000201 /* ReportingYearTests.swift */,
+				A00000000000000000000202 /* TestSupportStubs.swift */,
+			);
+			path = WFHAttendanceIOSTests;
 			sourceTree = "<group>";
 		};
 		900000000000000000000301 /* Components */ = {
@@ -291,6 +316,23 @@
 			productReference = 1A2B3C4D5E6F700000000301 /* WFH Attendance.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A00000000000000000000100 /* WFHAttendanceIOSTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000500 /* Build configuration list for PBXNativeTarget "WFHAttendanceIOSTests" */;
+			buildPhases = (
+				A00000000000000000000110 /* Sources */,
+				A00000000000000000000120 /* Frameworks */,
+				A00000000000000000000130 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = WFHAttendanceIOSTests;
+			productName = WFHAttendanceIOSTests;
+			productReference = A00000000000000000000301 /* WFHAttendanceIOSTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -303,6 +345,10 @@
 				TargetAttributes = {
 					1A2B3C4D5E6F700000000100 = {
 						CreatedOnToolsVersion = 26.5;
+					};
+					A00000000000000000000100 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = 1A2B3C4D5E6F700000000100;
 					};
 				};
 			};
@@ -321,6 +367,7 @@
 			projectRoot = "";
 			targets = (
 				1A2B3C4D5E6F700000000100 /* WFHAttendanceIOS */,
+				A00000000000000000000100 /* WFHAttendanceIOSTests */,
 			);
 		};
 /* End PBXProject section */
@@ -331,6 +378,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A2B3C4D5E6F700000000103 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000130 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -376,6 +430,17 @@
 				910000000000000000000112 /* YearCompositionLeaveCard.swift in Sources */,
 				910000000000000000000113 /* LeaveInfographicCard.swift in Sources */,
 				910000000000000000000114 /* YearReportPDF.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000110 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000000000000000000102 /* TestSupportStubs.swift in Sources */,
+				A00000000000000000000104 /* DateHelpers.swift in Sources */,
+				A00000000000000000000103 /* AttendanceModels.swift in Sources */,
+				A00000000000000000000101 /* ReportingYearTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -559,6 +624,42 @@
 			};
 			name = Release;
 		};
+		A00000000000000000000501 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9QYJ3WY899;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.paulhutton.wfhattendance.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A00000000000000000000502 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9QYJ3WY899;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.paulhutton.wfhattendance.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -576,6 +677,15 @@
 			buildConfigurations = (
 				1A2B3C4D5E6F700000000501 /* Debug */,
 				1A2B3C4D5E6F700000000502 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000500 /* Build configuration list for PBXNativeTarget "WFHAttendanceIOSTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000501 /* Debug */,
+				A00000000000000000000502 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
