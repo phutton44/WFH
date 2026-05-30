@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Set new password - Work Attendance</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #070b12;
+        color: #f4f8fb;
+      }
+      * { box-sizing: border-box; }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: radial-gradient(circle at top left, rgba(55, 215, 255, 0.16), transparent 32rem), #070b12;
+      }
+      main {
+        width: min(460px, 100%);
+        border: 1px solid #263647;
+        border-radius: 8px;
+        padding: 24px;
+        background: rgba(16, 23, 34, 0.92);
+        box-shadow: 0 20px 70px rgba(0, 0, 0, 0.35);
+      }
+      h1 { margin: 0 0 8px; font-size: 2rem; }
+      p { color: #91a4b5; line-height: 1.45; }
+      label {
+        display: grid;
+        gap: 8px;
+        margin-top: 16px;
+        color: #91a4b5;
+        font-weight: 800;
+      }
+      input {
+        min-height: 44px;
+        border: 1px solid #263647;
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: #070b12;
+        color: #f4f8fb;
+        font: inherit;
+      }
+      button {
+        width: 100%;
+        min-height: 46px;
+        margin-top: 18px;
+        border: 0;
+        border-radius: 8px;
+        background: #37d7ff;
+        color: #031118;
+        font: inherit;
+        font-weight: 900;
+      }
+      a { color: #37d7ff; }
+      .message { min-height: 1.4em; }
+      .error { color: #ff7d8f; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Set a new password</h1>
+      <p>Choose a new password, then sign in on the main page.</p>
+      <form id="reset-form" autocomplete="on" novalidate>
+        <label>
+          New password
+          <input id="reset-password" name="password" type="password" required minlength="12" autocomplete="new-password" />
+        </label>
+        <label>
+          Confirm new password
+          <input id="reset-password-confirm" name="password-confirm" type="password" required minlength="12" autocomplete="new-password" />
+        </label>
+        <p id="reset-message" class="message" role="status"></p>
+        <button id="reset-submit" type="submit">Update password</button>
+      </form>
+      <p><a href="/">Back to sign in</a></p>
+    </main>
+    <script>
+      window.WFH_API = window.WFH_API || { apiBase: "" };
+    </script>
+    <script src="/config.js" onerror="window.WFH_API = window.WFH_API || { apiBase: '' }"></script>
+    <script src="/reset.js"></script>
+  </body>
+</html>

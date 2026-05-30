@@ -147,15 +147,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		A00000000000000000000010 /* WFHAttendanceIOSTests */ = {
-			isa = PBXGroup;
-			children = (
-				A00000000000000000000201 /* ReportingYearTests.swift */,
-				A00000000000000000000202 /* TestSupportStubs.swift */,
-			);
-			path = WFHAttendanceIOSTests;
-			sourceTree = "<group>";
-		};
 		900000000000000000000301 /* Components */ = {
 			isa = PBXGroup;
 			children = (
@@ -294,6 +285,15 @@
 				910000000000000000000207 /* DaysExplainedSheet.swift */,
 			);
 			path = DayTypes;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000010 /* WFHAttendanceIOSTests */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000201 /* ReportingYearTests.swift */,
+				A00000000000000000000202 /* TestSupportStubs.swift */,
+			);
+			path = WFHAttendanceIOSTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -572,7 +572,7 @@
 				CODE_SIGN_ENTITLEMENTS = WFHAttendanceIOS/WFHAttendanceIOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 9QYJ3WY899;
 				ENABLE_APPLE_SIGN_IN = YES;
@@ -602,7 +602,7 @@
 				CODE_SIGN_ENTITLEMENTS = WFHAttendanceIOS/WFHAttendanceIOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 9QYJ3WY899;
 				ENABLE_APPLE_SIGN_IN = YES;

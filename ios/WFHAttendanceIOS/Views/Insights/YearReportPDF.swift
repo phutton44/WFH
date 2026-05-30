@@ -554,8 +554,8 @@ struct MonthReportPDFRenderer {
         Palette.paper.setFill()
         UIBezierPath(rect: page).fill()
 
-        drawText("Monthly Attendance Insights", in: CGRect(x: margin, y: 25, width: 330, height: 26), font: .boldSystemFont(ofSize: 22), color: Palette.ink)
-        drawText(report.subtitle, in: CGRect(x: margin, y: 53, width: 260, height: 16), font: .systemFont(ofSize: 10, weight: .semibold), color: Palette.muted)
+        drawText(report.month.title, in: CGRect(x: margin, y: 25, width: 330, height: 26), font: .boldSystemFont(ofSize: 24), color: Palette.ink)
+        drawText(report.subtitle, in: CGRect(x: margin, y: 53, width: 300, height: 16), font: .systemFont(ofSize: 10, weight: .semibold), color: Palette.muted)
         drawText(report.ownerLine, in: CGRect(x: page.width - margin - 270, y: 31, width: 270, height: 14), font: .systemFont(ofSize: 8.5, weight: .semibold), color: Palette.muted, alignment: .right)
         drawText("Generated \(DateHelpers.readableToday)", in: CGRect(x: page.width - margin - 270, y: 49, width: 270, height: 14), font: .systemFont(ofSize: 8.5), color: Palette.muted, alignment: .right)
 
@@ -571,7 +571,7 @@ struct MonthReportPDFRenderer {
         drawMonthFooter(report: report, rect: CGRect(x: margin, y: 681, width: contentWidth, height: 112))
 
         drawText(
-            "Month-to-Date hides future assigned working days. Leave, bank holidays and non-working days are excluded from office-target totals.",
+            "Leave, bank holidays and non-working days are excluded from office-target totals.",
             in: CGRect(x: margin, y: page.height - 32, width: contentWidth, height: 18),
             font: .systemFont(ofSize: 7.4),
             color: Palette.muted,
@@ -981,7 +981,7 @@ private struct MonthReportData {
     }
 
     var subtitle: String {
-        "\(month.title) · \(modeLabel)"
+        rangeMode == .yearToDate ? "Monthly Attendance Insights · \(modeLabel)" : "Monthly Attendance Insights"
     }
 
     var modeLabel: String {

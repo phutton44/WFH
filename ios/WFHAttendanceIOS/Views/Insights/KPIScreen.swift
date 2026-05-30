@@ -4,23 +4,18 @@ struct KPIScreen: View {
     @EnvironmentObject private var store: AttendanceStore
     let scope: InsightScope
     @Binding var month: Month
-    @State private var rangeMode: InsightRangeMode = .userRecorded
     @State private var generatedReport: GeneratedYearReport?
     @State private var pdfErrorMessage = ""
     @State private var showingPDFError = false
 
     var body: some View {
         let activeMetrics = metricsForActiveSelection()
-        let monthOutlookMetrics = metricsForFullMonthOutlook()
-        let monthToDateEnd = monthToDateEndISO()
         let bankHolidayCount = bankHolidayCountForActiveSelection()
         let reportYear = scope == .year ? month.year : store.profile.reportingYear(for: month.startISO)
         let leave = store.leaveBreakdown(year: reportYear)
         let activeShare = activeMetrics.monthOfficeShare
         let target = store.profile.settings.targetPct
-        let rangeTitle = scope == .month
-            ? (rangeMode == .yearToDate ? "Month-to-Date" : "User Recorded")
-            : "Year"
+        let rangeTitle = scope == .month ? "Month" : "Year"
         let canGoPrevious = canMoveToPreviousPeriod
 
         ScrollView(showsIndicators: false) {
@@ -37,20 +32,11 @@ struct KPIScreen: View {
                     }
                 )
 
-                if scope == .month {
-                    Picker("Range", selection: $rangeMode) {
-                        Text("User Recorded").tag(InsightRangeMode.userRecorded)
-                        Text("Month-to-Date").tag(InsightRangeMode.yearToDate)
-                    }
-                    .pickerStyle(.segmented)
-                    .controlSize(.small)
-                }
-
                 InsightDonutHero(
                     month: month,
                     title: "\(rangeTitle) insight",
                     metrics: activeMetrics,
-                    outlookMetrics: scope == .month && rangeMode == .yearToDate ? monthOutlookMetrics : nil,
+                    outlookMetrics: nil,
                     percent: activeShare,
                     target: target,
                     compact: false,
@@ -62,7 +48,7 @@ struct KPIScreen: View {
                         month: month,
                         compact: true,
                         dense: false,
-                        cutoffISO: rangeMode == .yearToDate ? monthToDateEnd : nil
+                        cutoffISO: nil
                     )
                     QuarterScoreboardCard(
                         year: reportYear,
@@ -70,7 +56,7 @@ struct KPIScreen: View {
                         compact: true,
                         dense: false,
                         highlightedQuarter: DateHelpers.reportingQuarter(for: month.startISO, startMonth: store.profile.yearStartMonth),
-                        cutoffISO: rangeMode == .yearToDate ? monthToDateEnd : nil
+                        cutoffISO: nil
                     )
                     MonthDetailsCard(
                         month: month,
@@ -79,7 +65,7 @@ struct KPIScreen: View {
                         bankHolidayCount: bankHolidayCount,
                         compact: true,
                         dense: false,
-                        rangeLabel: rangeMode == .yearToDate ? "Month-to-Date" : nil
+                        rangeLabel: nil
                     )
                 } else {
                     QuarterScoreboardCard(
@@ -145,8 +131,8 @@ struct KPIScreen: View {
                     month: month,
                     profile: store.profile,
                     userEmail: store.user?.email,
-                    rangeMode: rangeMode,
-                    cutoffISO: rangeMode == .yearToDate ? monthToDateEndISO() : nil
+                    rangeMode: .userRecorded,
+                    cutoffISO: nil
                 )
                 generatedReport = GeneratedYearReport(url: url, title: "Month Report")
             case .year:
@@ -212,8 +198,7 @@ struct KPIScreen: View {
     private func bankHolidayCountForActiveSelection() -> Int {
         switch scope {
         case .month:
-            let end = rangeMode == .yearToDate ? (monthToDateEndISO() ?? month.endISO) : month.endISO
-            return countBankHolidays(from: month.startISO, through: end)
+            return countBankHolidays(from: month.startISO, through: month.endISO)
         case .year:
             let bounds = yearMetricsBounds()
             return countBankHolidays(from: bounds.startISO, through: bounds.endISO)
@@ -221,19 +206,6 @@ struct KPIScreen: View {
     }
 
     private func metricsForMonth() -> Metrics {
-        if rangeMode == .userRecorded {
-            return store.metrics(from: month.startISO, through: month.endISO, respectingRecordingStart: true)
-        }
-        guard let end = monthToDateEndISO() else { return Metrics() }
-        return store.metrics(from: month.startISO, through: end, respectingRecordingStart: true)
-    }
-
-    private func monthToDateEndISO() -> String? {
-        let end = min(DateHelpers.todayISO(), month.endISO)
-        return end >= month.startISO ? end : nil
-    }
-
-    private func metricsForFullMonthOutlook() -> Metrics {
         store.metrics(from: month.startISO, through: month.endISO, respectingRecordingStart: true)
     }
 

@@ -21,7 +21,18 @@ module.exports = async (req, res) => {
   try {
     await ensureAppSchema();
     const { rows } = await getPool().query(
-      `select id, email, password_hash from public.users where lower(email) = lower($1)`,
+      `select u.id,
+              u.email,
+              u.password_hash,
+              u.email_verified_at,
+              exists (
+                select 1
+                  from public.email_verification_tokens evt
+                 where evt.user_id = u.id
+                   and evt.used_at is null
+              ) as needs_email_verification
+         from public.users u
+        where lower(u.email) = lower($1)`,
       [email],
     );
     const row = rows[0];
@@ -30,6 +41,9 @@ module.exports = async (req, res) => {
     }
     if (!row.password_hash) {
       return res.status(401).json({ error: "This account uses Google sign-in." });
+    }
+    if (!row.email_verified_at && row.needs_email_verification) {
+      return res.status(403).json({ error: "Please confirm your email address before signing in." });
     }
     const match = bcrypt.compareSync(password, row.password_hash);
     if (!match) {

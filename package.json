@@ -5,7 +5,10 @@
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
-    "build": "node scripts/write-config-from-env.cjs",
+    "build": "node scripts/write-config-from-env.cjs && npm run web:build",
+    "web:dev": "vite --host 127.0.0.1 --port 5173 web",
+    "web:build": "vite build web",
+    "web:preview": "vite preview --host 127.0.0.1 --port 4173 web",
     "electron:config": "WFH_PUBLIC_API_BASE=${WFH_PUBLIC_API_BASE:-https://wfh-one.vercel.app} node scripts/write-config-from-env.cjs",
     "electron:dev": "npm run electron:config && electron .",
     "mac:dir": "npm run electron:config && ELECTRON_CACHE=.cache/electron ELECTRON_BUILDER_CACHE=.cache/electron-builder CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir",
@@ -40,11 +43,19 @@
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^1.17.0",
     "pg": "^8.13.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "resend": "^4.8.0"
   },
   "devDependencies": {
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
     "electron": "^42.1.0",
-    "electron-builder": "^26.8.1"
+    "electron-builder": "^26.8.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
   }
 }

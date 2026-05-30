@@ -141,6 +141,7 @@ function normalizeEmail(email) {
 
 let schemaDone = false;
 let resetTokenSchemaDone = false;
+let verificationTokenSchemaDone = false;
 
 /**
  * Idempotent DDL for `public.users` + `public.app_state` (matches `neon/schema.sql`).
@@ -166,6 +167,13 @@ async function ensureAppSchema() {
       await client.query(`alter table public.users add column if not exists google_sub text`);
       await client.query(`alter table public.users add column if not exists apple_sub text`);
       await client.query(`alter table public.users add column if not exists auth_provider text not null default 'password'`);
+      await client.query(`alter table public.users add column if not exists email_verified_at timestamptz`);
+      await client.query(
+        `update public.users
+            set email_verified_at = coalesce(email_verified_at, created_at, now())
+          where email_verified_at is null
+            and (google_sub is not null or apple_sub is not null)`,
+      );
       await client.query(
         `create unique index if not exists users_google_sub_idx on public.users (google_sub) where google_sub is not null`,
       );
@@ -203,6 +211,24 @@ async function ensureAppSchema() {
         `create index if not exists password_reset_tokens_user_idx on public.password_reset_tokens (user_id)`,
       );
       resetTokenSchemaDone = true;
+    }
+    if (!verificationTokenSchemaDone) {
+      await client.query(`
+        create table if not exists public.email_verification_tokens (
+          id uuid primary key default gen_random_uuid(),
+          user_id uuid not null references public.users (id) on delete cascade,
+          token_hash text not null,
+          expires_at timestamptz not null,
+          used_at timestamptz,
+          created_at timestamptz not null default now()
+        )`);
+      await client.query(
+        `create index if not exists email_verification_tokens_hash_idx on public.email_verification_tokens (token_hash)`,
+      );
+      await client.query(
+        `create index if not exists email_verification_tokens_user_idx on public.email_verification_tokens (user_id)`,
+      );
+      verificationTokenSchemaDone = true;
     }
   } finally {
     client.release();

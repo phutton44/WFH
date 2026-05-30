@@ -21,23 +21,26 @@ Track office vs WFH days, annual leave, and NWD on a calendar with England & Wal
    | **`JWT_SECRET`** | Any random string, **≥16 characters**, used only by **`api/`** to sign session JWTs. |
    | **`GOOGLE_CLIENT_ID`** | Optional. Google OAuth **Web application** client ID for “Continue with Google”. Also accepted as **`WFH_GOOGLE_CLIENT_ID`**. Add your production and local origins in Google Cloud. |
    | **`GOOGLE_IOS_CLIENT_ID`** | Optional. Google OAuth **iOS** client ID used by the native app. Also accepted as **`WFH_GOOGLE_IOS_CLIENT_ID`**. |
-   | **`RESEND_API_KEY`** | Optional but required to **send** reset mail. [Resend](https://resend.com) API key. |
-   | **`RESEND_FROM_EMAIL`** | Optional but required to **send** reset mail. Verified sender in Resend (e.g. `App <noreply@yourdomain.com>`). Alias: **`RESEND_FROM`**. |
-   | **`WFH_PUBLIC_ORIGIN`** | Optional. Full public site URL without a trailing slash (e.g. `https://your-app.vercel.app`). Used to build reset links when the request’s Host / forwarded headers are missing or wrong. |
+   | **`APPLE_WEB_CLIENT_ID`** | Optional. Apple Services ID for web “Continue with Apple”. Also accepted as **`WFH_APPLE_WEB_CLIENT_ID`**. |
+   | **`APPLE_REDIRECT_URI`** | Optional but recommended for web Apple sign-in. Also accepted as **`WFH_APPLE_REDIRECT_URI`**. Must match the return URL configured on the Apple Services ID. |
+   | **`APPLE_CLIENT_ID`** | Optional legacy/shared Apple audience name. The API accepts it as a fallback, but prefer **`APPLE_WEB_CLIENT_ID`** for the web frontend. |
+   | **`RESEND_API_KEY`** | Optional but required to **send** account-confirmation and reset mail. [Resend](https://resend.com) API key. |
+   | **`RESEND_FROM_EMAIL`** | Optional but required to **send** account-confirmation and reset mail. Verified sender in Resend (e.g. `App <noreply@yourdomain.com>`). Alias: **`RESEND_FROM`**. |
+   | **`WFH_PUBLIC_ORIGIN`** | Optional. Full public site URL without a trailing slash (e.g. `https://your-app.vercel.app`). Used to build confirmation/reset links when the request’s Host / forwarded headers are missing or wrong. |
 
    **Compatibility:** some older Vercel project templates expose **`POSTGRES_URL`** instead of `DATABASE_URL`, or **`SUPABASE_JWT_SECRET`** instead of `JWT_SECRET`. The server reads those as fallbacks so you do not have to rename env vars when moving projects—**your database is still Neon Postgres**, not the old Supabase browser client.
 
 4. Deploy, then open `https://your-deployment.vercel.app/api/health` — you should see `{"ok":true}`.
 
-### Password reset email (Resend)
+### Account confirmation and password reset email (Resend)
 
-Forgot-password uses **[Resend](https://resend.com)** only (no SMTP or other mail providers in this repo). To actually deliver mail:
+Email/password sign-up and forgot-password use **[Resend](https://resend.com)** only (no SMTP or other mail providers in this repo). To actually deliver mail:
 
 1. Create a Resend account, verify a **sending domain** (or use Resend’s onboarding sender for tests).
 2. In Vercel → Environment variables, set **`RESEND_API_KEY`** and **`RESEND_FROM_EMAIL`** (must match a verified sender / domain in Resend).
-3. Set **`WFH_PUBLIC_ORIGIN`** to your live site URL (no trailing slash), e.g. `https://your-app.vercel.app`, so the reset link in the email points at **`/reset.html?token=…`** on the correct host.
+3. Set **`WFH_PUBLIC_ORIGIN`** to your live site URL (no trailing slash), e.g. `https://your-app.vercel.app`, so confirmation links point at **`/?verify=…`** and reset links point at **`/reset.html?token=…`** on the correct host.
 
-If those variables are missing, **`POST /api/auth/forgot-password`** still returns **200** with a generic message (no account enumeration), but no email is sent.
+If those variables are missing, password reset still returns **200** with a generic message (no account enumeration), but no email is sent. New email/password accounts also require that mail configuration so users can receive the confirmation link before signing in.
 
 ### Google sign-in
 

@@ -5,5 +5,10 @@
  */
 window.WFH_API = {
   apiBase: "",
+  // Generated from GOOGLE_WEB_CLIENT_ID / WFH_GOOGLE_WEB_CLIENT_ID.
   googleClientId: "",
+  // Generated from APPLE_WEB_CLIENT_ID / WFH_APPLE_WEB_CLIENT_ID.
+  appleClientId: "",
+  // Usually https://your-app.vercel.app/ for Apple web popup auth.
+  appleRedirectURI: "",
 };

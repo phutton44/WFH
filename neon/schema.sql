@@ -10,6 +10,7 @@ create table if not exists public.users (
   google_sub text unique,
   apple_sub text unique,
   auth_provider text not null default 'password',
+  email_verified_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -17,6 +18,12 @@ alter table public.users alter column password_hash drop not null;
 alter table public.users add column if not exists google_sub text;
 alter table public.users add column if not exists apple_sub text;
 alter table public.users add column if not exists auth_provider text not null default 'password';
+alter table public.users add column if not exists email_verified_at timestamptz;
+
+update public.users
+   set email_verified_at = coalesce(email_verified_at, created_at, now())
+ where email_verified_at is null
+   and (google_sub is not null or apple_sub is not null);
 
 create index if not exists users_email_lower_idx on public.users (lower(email));
 create unique index if not exists users_google_sub_idx on public.users (google_sub) where google_sub is not null;
@@ -41,3 +48,15 @@ create table if not exists public.password_reset_tokens (
 
 create index if not exists password_reset_tokens_hash_idx on public.password_reset_tokens (token_hash);
 create index if not exists password_reset_tokens_user_idx on public.password_reset_tokens (user_id);
+
+create table if not exists public.email_verification_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users (id) on delete cascade,
+  token_hash text not null,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists email_verification_tokens_hash_idx on public.email_verification_tokens (token_hash);
+create index if not exists email_verification_tokens_user_idx on public.email_verification_tokens (user_id);

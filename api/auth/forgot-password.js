@@ -1,42 +1,19 @@
 "use strict";
 
 const crypto = require("crypto");
-const { Resend } = require("resend");
 const { getPool, methodNotAllowed, parseJsonBody, normalizeEmail, ensureAppSchema, getRequestOrigin } = require("../_shared.js");
+const { escapeHtml, sendEmail } = require("../email.js");
 
 function hashToken(raw) {
   return crypto.createHash("sha256").update(String(raw), "utf8").digest("hex");
 }
 
-/**
- * Password-reset mail is sent only via [Resend](https://resend.com) (`RESEND_API_KEY` + `RESEND_FROM_EMAIL`).
- * Missing env or API errors are logged; the HTTP handler still returns a generic success body.
- */
 async function sendPasswordResetEmail({ to, resetUrl }) {
-  const key = String(process.env.RESEND_API_KEY || "").trim();
-  const from = String(process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || "").trim();
-  if (!key || !from) {
-    console.warn("[WFH] Missing RESEND_API_KEY or RESEND_FROM_EMAIL — password reset email not sent.");
-    return;
-  }
-  const safeUrl = resetUrl.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  const safeUrl = escapeHtml(resetUrl);
   const html = `<p>We received a request to reset your password.</p>
 <p><a href="${safeUrl}">Set a new password</a> (link valid for 1 hour).</p>
 <p>If you did not ask for this, you can ignore this email.</p>`;
-  try {
-    const resend = new Resend(key);
-    const { error } = await resend.emails.send({
-      from,
-      to: [to],
-      subject: "Reset your attendance tracker password",
-      html,
-    });
-    if (error) {
-      console.error("[WFH] Resend API error", error);
-    }
-  } catch (err) {
-    console.error("[WFH] Resend send failed", err);
-  }
+  await sendEmail({ to, subject: "Reset your attendance tracker password", html });
 }
 
 module.exports = async (req, res) => {

@@ -8,6 +8,8 @@ let googleKeysExpiresAt = 0;
 
 function getGoogleClientIds() {
   return [
+    process.env.GOOGLE_WEB_CLIENT_ID,
+    process.env.WFH_GOOGLE_WEB_CLIENT_ID,
     process.env.GOOGLE_CLIENT_ID,
     process.env.WFH_GOOGLE_CLIENT_ID,
     process.env.GOOGLE_IOS_CLIENT_ID,
@@ -148,6 +150,7 @@ module.exports = async (req, res) => {
           ({ rows } = await client.query(
             `update public.users
              set google_sub = coalesce(google_sub, $2),
+                 email_verified_at = coalesce(email_verified_at, now()),
                  auth_provider = case
                    when password_hash is null then 'google'
                    when auth_provider = 'password' then 'password_google'
@@ -160,8 +163,8 @@ module.exports = async (req, res) => {
           user = rows[0];
         } else {
           ({ rows } = await client.query(
-            `insert into public.users (email, password_hash, google_sub, auth_provider)
-             values ($1, null, $2, 'google')
+            `insert into public.users (email, password_hash, google_sub, auth_provider, email_verified_at)
+             values ($1, null, $2, 'google', now())
              returning id, email`,
             [googleUser.email, googleUser.sub],
           ));

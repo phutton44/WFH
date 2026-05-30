@@ -14,6 +14,8 @@ function getAppleAudiences() {
   return uniqueTruthy([
     process.env.APPLE_CLIENT_ID,
     process.env.WFH_APPLE_CLIENT_ID,
+    process.env.APPLE_WEB_CLIENT_ID,
+    process.env.WFH_APPLE_WEB_CLIENT_ID,
     process.env.APPLE_BUNDLE_ID,
     process.env.APPLE_IOS_BUNDLE_ID,
     process.env.WFH_APPLE_IOS_BUNDLE_ID,
@@ -178,6 +180,7 @@ module.exports = async (req, res) => {
           ({ rows } = await client.query(
             `update public.users
              set apple_sub = coalesce(apple_sub, $2),
+                 email_verified_at = coalesce(email_verified_at, now()),
                  auth_provider = case
                    when password_hash is null then 'apple'
                    when auth_provider = 'password' then 'password_apple'
@@ -194,8 +197,8 @@ module.exports = async (req, res) => {
       if (!user) {
         const email = appleUser.email || `apple-${appleUser.sub}@privaterelay.appleid.com`;
         ({ rows } = await client.query(
-          `insert into public.users (email, password_hash, apple_sub, auth_provider)
-           values ($1, null, $2, 'apple')
+          `insert into public.users (email, password_hash, apple_sub, auth_provider, email_verified_at)
+           values ($1, null, $2, 'apple', now())
            returning id, email`,
           [email, appleUser.sub],
         ));

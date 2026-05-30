@@ -79,7 +79,7 @@ struct SettingsScreen: View {
                             .accessibilityValue("\(Int(targetPct.rounded())) percent")
                     }
 
-                    Text("Sets the percentage of counted working days you aim to spend in the office.")
+                    Text("Set office attendance % target")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.holidayGreen)
                         .fixedSize(horizontal: false, vertical: true)
@@ -117,7 +117,7 @@ struct SettingsScreen: View {
                         }
                     }
 
-                    Text("Sets the first month the app should include in your records and reports.")
+                    Text("First month user starts recording office attendance")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.holidayGreen)
                         .fixedSize(horizontal: false, vertical: true)
