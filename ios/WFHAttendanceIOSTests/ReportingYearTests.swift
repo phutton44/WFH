@@ -141,6 +141,27 @@ final class ReportingYearTests: XCTestCase {
         XCTAssertGreaterThan(metrics.workingDays, metrics.office)
     }
 
+    func testSicknessIsExcludedFromTargetWorkingDays() {
+        var profile = AttendanceProfile.defaultProfile()
+        profile.settings = ProfileSettings(
+            targetPct: 50,
+            leaveAllowances: ["2026": 25],
+            recordingStartMonth: "2026-07",
+            yearStartMonth: 1
+        )
+        profile.officeMarks = ["2026-07-06"]
+        profile.sicknessMarks = ["2026-07-07"]
+        profile.leaveMarks = ["2026-07-08"]
+
+        let metrics = profile.metrics(from: "2026-07-06", through: "2026-07-08", respectingRecordingStart: true)
+
+        XCTAssertEqual(metrics.office, 1)
+        XCTAssertEqual(metrics.sickness, 1)
+        XCTAssertEqual(metrics.leave, 1)
+        XCTAssertEqual(metrics.workingDays, 1)
+        XCTAssertEqual(metrics.monthOfficeShare, 100)
+    }
+
     private func julyReportingYearState() -> AttendanceState {
         var state = AttendanceState.defaultState()
         state.profiles[0].settings = ProfileSettings(

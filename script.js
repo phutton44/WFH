@@ -2023,7 +2023,6 @@ function getMetrics(profile, startISO, endISO) {
     } else if (profile.leaveMarks.includes(iso) && working) {
       metrics.leave += 1;
     } else if (profile.sicknessMarks.includes(iso) && working) {
-      metrics.workingDays += 1;
       metrics.sickness += 1;
     } else if (profile.nwdMarks.includes(iso)) {
       metrics.nwd += 1;

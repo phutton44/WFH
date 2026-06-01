@@ -231,7 +231,6 @@ export function metrics(profile: AttendanceProfile, start: string, end: string, 
     } else if (kind === "leave" && working) {
       result.leave += 1;
     } else if (kind === "sickness" && working) {
-      result.workingDays += 1;
       result.sickness += 1;
     } else if (kind === "nwd") {
       result.nwd += 1;

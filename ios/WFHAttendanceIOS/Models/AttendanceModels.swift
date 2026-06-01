@@ -420,7 +420,6 @@ struct AttendanceProfile: Codable {
             case .leave where working:
                 metrics.leave += 1
             case .sickness where working:
-                metrics.workingDays += 1
                 metrics.sickness += 1
             case .nwd:
                 metrics.nwd += 1
@@ -526,7 +525,7 @@ struct Metrics {
     }
 
     var assignedWorkingDays: Int {
-        office + wfh + sickness
+        office + wfh
     }
 
     func officeDaysNeededForMonthTarget(_ target: Double) -> Int {
